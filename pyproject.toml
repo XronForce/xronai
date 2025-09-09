@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xronai"
-version = "0.1.1" # Start with an initial version
+version = "0.1.2" # Start with an initial version
 authors = [
   { name="Mubashir ul Islam", email="mubashir54000@gmail.com" },
 ]
