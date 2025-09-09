@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xronai"
+version = "0.1.0" # Start with an initial version
+authors = [
+  { name="Mubashir ul Islam", email="mubashir54000@gmail.com" },
+]
+description = "XronAI: The Python SDK for building powerful, agentic AI chatbots."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Assuming you use MIT, change if needed
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["ai", "sdk", "chatbot", "agent", "llm", "orchestration"]
+dependencies = [ 
+    "openai==1.66.3", 
+    "python-dotenv==1.0.1", 
+    "streamlit>=1.38.0", 
+    "pytest==8.3.4", 
+    "PyYAML==6.0.2", 
+    "mcp[cli]==1.6.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/XronForce/xronai"
+"Bug Tracker" = "https://github.com/XronForce/xronai/issues"
+
+# This section is CRUCIAL for the src layout
+[tool.setuptools.packages.find]
+where = ["src"]
