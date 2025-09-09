@@ -9,10 +9,10 @@ import json, uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from openai.types.chat import ChatCompletionMessage
-from src.xronai.core import AI
-from src.xronai.core import Agent
-from src.xronai.history import HistoryManager, EntityType
-from src.xronai.utils import Debugger
+from xronai.core import AI
+from xronai.core import Agent
+from xronai.history import HistoryManager, EntityType
+from xronai.utils import Debugger
 
 
 class Supervisor(AI):

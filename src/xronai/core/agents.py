@@ -8,9 +8,9 @@ with additional features like tool usage and chat history management.
 import json, asyncio
 from typing import List, Dict, Optional, Any
 from openai.types.chat import ChatCompletionMessage
-from src.xronai.core.ai import AI
-from src.xronai.history import HistoryManager, EntityType
-from src.xronai.utils import Debugger
+from xronai.core.ai import AI
+from xronai.history import HistoryManager, EntityType
+from xronai.utils import Debugger
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
