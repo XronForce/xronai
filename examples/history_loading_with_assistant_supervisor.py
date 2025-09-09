@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.xronai.core import Agent, Supervisor
+from src.xronai.history import HistoryManager
 
 # Load environment variables
 load_dotenv()
@@ -44,7 +45,7 @@ def test_hierarchical_structure():
     print(f"Registered agents with Sub-Supervisor: {sub_supervisor.get_registered_agents()}")
 
     # Test chat functionality
-    test_query = "Hello, can you demonstrate the hierarchical structure?"
+    test_query = "Hello, can you demonstrate the hierarchical structure by asking all the agents?"
     print(f"\nTesting chat with query: '{test_query}'")
     response = main_supervisor.chat(test_query)
     print(f"Response: {response}")
@@ -52,6 +53,15 @@ def test_hierarchical_structure():
     # Display the agent graph
     print("\nAgent Graph:")
     main_supervisor.display_agent_graph()
+
+    workflow_id = main_supervisor.workflow_id
+    history_manager = HistoryManager(workflow_id)
+
+    print("MainSupervisor: \n", history_manager.load_chat_history("MainSupervisor"))
+    print("\nSubSupervisor: \n", history_manager.load_chat_history("SubSupervisor"))
+    print("\nAgent1: \n", history_manager.load_chat_history("Agent1"))
+    print("\nAgent2: \n", history_manager.load_chat_history("Agent2"))
+    print("\nAgent3: \n", history_manager.load_chat_history("Agent3"))
 
 
 if __name__ == "__main__":
