@@ -59,6 +59,7 @@ class StateManager:
                 "api_key": os.getenv("LLM_API_KEY", "default-key"),
                 "base_url": os.getenv("LLM_BASE_URL", "default-url"),
             },
+            workflow_id="blank-canvas",
             system_message="You are a helpful assistant. You are the starting point for a new workflow.")
 
         await self.root_node._load_mcp_tools()

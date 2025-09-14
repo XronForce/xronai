@@ -6,6 +6,7 @@ with additional features like tool usage and chat history management.
 """
 
 import json, asyncio, uuid
+from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable
 from openai.types.chat import ChatCompletionMessage
@@ -43,7 +44,9 @@ class Agent(AI):
         Args:
             name (str): The name of the agent.
             llm_config (Dict[str, str]): Configuration for the language model.
-            workflow_id (Optional[str]): ID of the workflow. Will be set when registered with a Supervisor.
+            workflow_id (Optional[str]): ID of the workflow. If provided, the agent will
+                                       initialize its own persistent history. If not, one
+                                       will be assigned by a Supervisor upon registration.
             tools (Optional[List[Dict[str, Any]]]): List of tools available to the agent.
             system_message (Optional[str]): The initial system message for the agent.
             use_tools (bool): Whether to use tools in interactions.
@@ -71,7 +74,7 @@ class Agent(AI):
         self.system_message = system_message
         self.keep_history = keep_history
         self.history_manager = None
-        self.debugger = Debugger(name=self.name, workflow_id=None)
+        self.debugger = Debugger(name=self.name, workflow_id=self.workflow_id)
         self.debugger.start_session()
         self.chat_history: List[Dict[str, str]] = []
         self.mcp_servers = mcp_servers or []
@@ -82,12 +85,53 @@ class Agent(AI):
         if system_message:
             self.set_system_message(system_message)
 
+        # --- NEW LOGIC: Make Agent self-sufficient for history ---
+        if self.workflow_id and self.keep_history:
+            self._initialize_workflow()
+        # --------------------------------------------------------
+
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             if self.mcp_servers:
                 asyncio.run(self._load_mcp_tools())
-        # --------------------------------------------------------
+
+    def _initialize_workflow(self):
+        """
+        Initializes the workflow directory and history manager for a standalone agent.
+        """
+        if not self.workflow_id:
+            self.workflow_id = str(uuid.uuid4())
+
+        self.debugger.update_workflow_id(self.workflow_id)
+
+        workflow_path = Path("xronai_logs") / self.workflow_id
+        workflow_path.mkdir(parents=True, exist_ok=True)
+
+        history_file = workflow_path / "history.jsonl"
+        if not history_file.exists():
+            history_file.touch()
+
+        self.history_manager = HistoryManager(self.workflow_id)
+
+        # Save system message and load previous history
+        self._initialize_chat_history()
+
+        # Load chat history from disk
+        self.chat_history = self.history_manager.load_chat_history(self.name)
+        if len(self.chat_history) > 1:  # More than just the system message
+            self.debugger.log(f"Previous history loaded for standalone agent {self.name}.")
+
+    def _initialize_chat_history(self):
+        """Saves the system message to history if it doesn't already exist."""
+        if self.system_message and self.history_manager:
+            if not self.history_manager.has_system_message(self.name):
+                self.history_manager.append_message(message={
+                    "role": "system",
+                    "content": self.system_message
+                },
+                                                    sender_type=EntityType.AGENT,
+                                                    sender_name=self.name)
 
     def _emit_event(self, on_event: Optional[Callable], event_type: str, data: Dict[str, Any]):
         """Safely emits an event if the callback is provided."""
@@ -108,17 +152,17 @@ class Agent(AI):
         Args:
             workflow_id (str): The workflow ID to set.
         """
+        # --- MODIFIED LOGIC: Prevent re-initialization ---
+        if self.workflow_id:
+            # If the agent already initialized its own workflow, just update the debugger
+            self.debugger.update_workflow_id(workflow_id)
+            return
+        # -------------------------------------------------
+
         self.workflow_id = workflow_id
         self.debugger.update_workflow_id(workflow_id)
         self.history_manager = HistoryManager(workflow_id)
-
-        if self.system_message and not self.history_manager.has_system_message(self.name):
-            self.history_manager.append_message(message={
-                "role": "system",
-                "content": self.system_message
-            },
-                                                sender_type=EntityType.AGENT,
-                                                sender_name=self.name)
+        self._initialize_chat_history()
 
     def set_system_message(self, message: str) -> None:
         """
@@ -463,7 +507,6 @@ class Agent(AI):
                 }
             }
         }
-        # Extract properties and required fields from MCP input schema
         if hasattr(tool, 'inputSchema') and tool.inputSchema:
             schema = tool.inputSchema
             property_names = []
@@ -500,7 +543,7 @@ class Agent(AI):
             async def _call_sse():
                 url = conf["url"]
                 auth_token = conf.get("auth_token")
-                endpoint = url  # Use the user-supplied URL exactly as written
+                endpoint = url
                 headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
                 async with sse_client(endpoint, headers=headers) as streams:
                     async with ClientSession(*streams) as session:
@@ -522,7 +565,6 @@ class Agent(AI):
                         return str(result)
 
             try:
-                # This logic is now async-aware
                 if transport_type == "sse":
                     try:
                         loop = asyncio.get_running_loop()
