@@ -7,7 +7,8 @@ users and multiple specialized AI agents.
 
 import json, uuid
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Union, Callable
 from openai.types.chat import ChatCompletionMessage
 from xronai.core import AI
 from xronai.core import Agent
@@ -84,6 +85,17 @@ class Supervisor(AI):
 
         self.debugger = Debugger(name=self.name, workflow_id=self.workflow_id)
         self.debugger.start_session()
+
+    def _emit_event(self, on_event: Optional[Callable], event_type: str, data: Dict[str, Any]):
+        """Safely emits an event if the callback is provided."""
+        if on_event:
+            payload = {
+                "id": f"evt_{uuid.uuid4()}",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "type": event_type,
+                "data": data,
+            }
+            on_event(payload)
 
     def _get_default_system_message(self) -> str:
         """
@@ -240,7 +252,8 @@ class Supervisor(AI):
     def delegate_to_agent(self,
                           message: ChatCompletionMessage,
                           parent_msg_id: str,
-                          supervisor_chain: Optional[List[str]] = None) -> str:
+                          supervisor_chain: Optional[List[str]] = None,
+                          on_event: Optional[Callable] = None) -> str:
         """
         Delegate a task to the appropriate agent based on the supervisor's response.
 
@@ -248,6 +261,7 @@ class Supervisor(AI):
             message (ChatCompletionMessage): The message containing the delegation information.
             parent_msg_id (str): ID of the parent message in history.
             supervisor_chain (Optional[List[str]]): Chain of supervisors involved in delegation.
+            on_event (Optional[Callable]): The event callback function.
 
         Returns:
             str: The response from the delegated agent.
@@ -259,7 +273,7 @@ class Supervisor(AI):
             raise ValueError("Message does not contain tool calls")
 
         function_call = message.tool_calls[0]
-        target_agent_name = function_call.function.name.replace("delegate_to_", "").lower()
+        target_agent_name = function_call.function.name.replace("delegate_to_", "")
         args = json.loads(function_call.function.arguments)
         reasoning = args.get('reasoning')
         context = args.get('context')
@@ -268,23 +282,44 @@ class Supervisor(AI):
         if not query:
             raise ValueError("Query is missing from the function call")
 
+        target_agent = next((agent for agent in self.registered_agents if agent.name == target_agent_name), None)
+
+        if not target_agent:
+            raise ValueError(f"No agent found with name '{target_agent_name}'")
+
         self.debugger.log(f"[DELEGATION] Agent: {target_agent_name}")
         self.debugger.log(f"[REASONING] {reasoning}")
         self.debugger.log(f"[CONTEXT] {context}")
         self.debugger.log(f"[QUERY] {query}")
 
+        self._emit_event(
+            on_event, "SUPERVISOR_DELEGATE", {
+                "source": {
+                    "name": self.name,
+                    "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                },
+                "target": {
+                    "name": target_agent.name,
+                    "type": "AGENT" if isinstance(target_agent, Agent) else "ASSISTANT_SUPERVISOR"
+                },
+                "reasoning": reasoning,
+                "query_for_agent": query
+            })
+
         current_chain = supervisor_chain or []
         current_chain.append(self.name)
 
-        for agent in self.registered_agents:
-            if agent.name.lower() == target_agent_name:
-                agent_response = agent.chat(query=f"CONTEXT:\n{context}\n\nQUERY:\n{query}", sender_name=self.name)
-                self.debugger.log(f"[RESPONSE] {target_agent_name}: {agent_response}")
-                return agent_response
+        agent_response = target_agent.chat(query=f"CONTEXT:\n{context}\n\nQUERY:\n{query}",
+                                           sender_name=self.name,
+                                           on_event=on_event)
+        self.debugger.log(f"[RESPONSE] {target_agent_name}: {agent_response}")
+        return agent_response
 
-        raise ValueError(f"No agent found with name '{target_agent_name}'")
-
-    def chat(self, query: str, sender_name: Optional[str] = None, supervisor_chain: Optional[List[str]] = None) -> str:
+    def chat(self,
+             query: str,
+             sender_name: Optional[str] = None,
+             supervisor_chain: Optional[List[str]] = None,
+             on_event: Optional[Callable] = None) -> str:
         """
         Process user input and generate a response using the appropriate agents.
 
@@ -292,6 +327,7 @@ class Supervisor(AI):
             query (str): The user's input query.
             sender_name (Optional[str]): Name of the sender (for assistant supervisors).
             supervisor_chain (Optional[List[str]]): Chain of supervisors in delegation.
+            on_event (Optional[Callable]): A callback function to stream events to.
 
         Returns:
             str: The final response to the user's query.
@@ -300,6 +336,8 @@ class Supervisor(AI):
             RuntimeError: If there's an error in processing the user input.
         """
         self.debugger.log(f"[USER INPUT] {query}")
+
+        self._emit_event(on_event, "WORKFLOW_START", {"user_query": query})
 
         current_chain = supervisor_chain or []
         if self.name not in current_chain:
@@ -334,6 +372,15 @@ class Supervisor(AI):
                                                         parent_id=user_msg_id,
                                                         supervisor_chain=current_chain)
 
+                    self._emit_event(
+                        on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                            },
+                            "content": query_answer
+                        })
+                    self._emit_event(on_event, "WORKFLOW_END", {})
                     return query_answer
 
                 tool_call = supervisor_response.message.tool_calls[0]
@@ -365,7 +412,20 @@ class Supervisor(AI):
                 if hasattr(supervisor_response.message, 'tool_calls') and supervisor_response.message.tool_calls:
                     agent_feedback = self.delegate_to_agent(supervisor_response.message,
                                                             tool_msg_id,
-                                                            supervisor_chain=current_chain)
+                                                            supervisor_chain=current_chain,
+                                                            on_event=on_event)
+
+                    self._emit_event(
+                        on_event,
+                        "AGENT_RESPONSE",
+                        {
+                            "source": {
+                                "name": tool_call.function.name.replace("delegate_to_", ""),
+                                "type": "AGENT"
+                            },  # A bit of a hack to get agent name
+                            "content": agent_feedback
+                        })
+
                     feedback_msg = {"role": "tool", "content": agent_feedback, "tool_call_id": tool_call.id}
                     self.chat_history.append(feedback_msg)
 
@@ -376,11 +436,30 @@ class Supervisor(AI):
                                                         tool_call_id=tool_call.id,
                                                         supervisor_chain=current_chain)
                 else:
-                    return supervisor_response.message.content
+                    final_content = supervisor_response.message.content
+                    self._emit_event(
+                        on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                            },
+                            "content": final_content
+                        })
+                    self._emit_event(on_event, "WORKFLOW_END", {})
+                    return final_content
 
         except Exception as e:
             error_msg = f"Error in processing user input: {str(e)}"
             self.debugger.log(f"[ERROR] {error_msg}", level="error")
+            self._emit_event(
+                on_event, "ERROR", {
+                    "source": {
+                        "name": self.name,
+                        "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                    },
+                    "error_message": error_msg
+                })
+            self._emit_event(on_event, "WORKFLOW_END", {})
             raise RuntimeError(error_msg)
 
     def start_interactive_session(self) -> None:

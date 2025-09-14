@@ -23,7 +23,7 @@ class AgentFactory:
     """
 
     @staticmethod
-    def create_from_config(config: Dict[str, Any]) -> Supervisor:
+    async def create_from_config(config: Dict[str, Any]) -> Supervisor:
         """
         Create a Supervisor with its entire hierarchy from a configuration dictionary.
 
@@ -40,12 +40,12 @@ class AgentFactory:
         ConfigValidator.validate(config)
         # Generate workflow_id if not provided
         workflow_id = config.get('workflow_id', str(uuid.uuid4()))
-        return AgentFactory._create_supervisor(config['supervisor'], is_root=True, workflow_id=workflow_id)
+        return await AgentFactory._create_supervisor(config['supervisor'], is_root=True, workflow_id=workflow_id)
 
     @staticmethod
-    def _create_supervisor(supervisor_config: Dict[str, Any],
-                           is_root: bool = False,
-                           workflow_id: Optional[str] = None) -> Supervisor:
+    async def _create_supervisor(supervisor_config: Dict[str, Any],
+                                 is_root: bool = False,
+                                 workflow_id: Optional[str] = None) -> Supervisor:
         """
         Create a Supervisor instance and its children from a configuration dictionary.
 
@@ -65,19 +65,15 @@ class AgentFactory:
 
         for child_config in supervisor_config.get('children', []):
             if child_config['type'] == 'supervisor':
-                child = AgentFactory._create_supervisor(
-                    child_config,
-                    is_root=False,
-                    workflow_id=None  # Assistant supervisors get workflow_id during registration
-                )
+                child = await AgentFactory._create_supervisor(child_config, is_root=False, workflow_id=None)
             else:  # agent
-                child = AgentFactory._create_agent(child_config)
+                child = await AgentFactory._create_agent(child_config)
             supervisor.register_agent(child)
 
         return supervisor
 
     @staticmethod
-    def _create_agent(agent_config: Dict[str, Any]) -> Agent:
+    async def _create_agent(agent_config: Dict[str, Any]) -> Agent:
         """
         Create an Agent instance from a configuration dictionary.
 
@@ -101,7 +97,9 @@ class AgentFactory:
             'mcp_servers': agent_config.get('mcp_servers', [])
         }
 
-        return Agent(**agent_params)
+        agent = Agent(**agent_params)
+        await agent._load_mcp_tools()
+        return agent
 
     @staticmethod
     def _create_tools(tools_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

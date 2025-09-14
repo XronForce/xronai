@@ -5,8 +5,9 @@ This module provides an Agent class that extends the base AI functionality
 with additional features like tool usage and chat history management.
 """
 
-import json, asyncio
-from typing import List, Dict, Optional, Any
+import json, asyncio, uuid
+from datetime import datetime
+from typing import List, Dict, Optional, Any, Callable
 from openai.types.chat import ChatCompletionMessage
 from xronai.core.ai import AI
 from xronai.history import HistoryManager, EntityType
@@ -81,7 +82,23 @@ class Agent(AI):
         if system_message:
             self.set_system_message(system_message)
 
-        asyncio.run(self._load_mcp_tools())
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            if self.mcp_servers:
+                asyncio.run(self._load_mcp_tools())
+        # --------------------------------------------------------
+
+    def _emit_event(self, on_event: Optional[Callable], event_type: str, data: Dict[str, Any]):
+        """Safely emits an event if the callback is provided."""
+        if on_event:
+            payload = {
+                "id": f"evt_{uuid.uuid4()}",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "type": event_type,
+                "data": data,
+            }
+            on_event(payload)
 
     def set_workflow_id(self, workflow_id: str) -> None:
         """
@@ -154,14 +171,15 @@ class Agent(AI):
                 self.debugger.log("Schema enforcement failed", level="error")
                 return response
 
-    def chat(self, query: str, sender_name: Optional[str] = None) -> str:
+    def chat(self, query: str, sender_name: Optional[str] = None, on_event: Optional[Callable] = None) -> str:
         """
         Process a chat interaction with the agent.
 
         Args:
             query (str): The query to process.
             sender_name (Optional[str]): Name of the entity sending the query.
-                                       Could be a supervisor name or None for direct interactions.
+                                       If None, this agent is treated as the top-level entry point.
+            on_event (Optional[Callable]): A callback function to stream events to.
 
         Returns:
             str: The agent's response to the query.
@@ -170,6 +188,10 @@ class Agent(AI):
             RuntimeError: If there's an error processing the query or using tools.
         """
         self.debugger.log(f"Query received from {sender_name or 'direct'}: {query}")
+
+        is_entry_point = sender_name is None
+        if is_entry_point:
+            self._emit_event(on_event, "WORKFLOW_START", {"user_query": query})
 
         if not self.keep_history:
             self._reset_chat_history()
@@ -203,6 +225,17 @@ class Agent(AI):
                                                             sender_type=EntityType.AGENT,
                                                             sender_name=self.name,
                                                             parent_id=query_msg_id)
+
+                    if is_entry_point:
+                        self._emit_event(on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "AGENT"
+                            },
+                            "content": user_query_answer
+                        })
+                        self._emit_event(on_event, "WORKFLOW_END", {})
+
                     return user_query_answer
 
                 tool_call = response.message.tool_calls[0]
@@ -230,20 +263,33 @@ class Agent(AI):
                                                                       parent_id=query_msg_id,
                                                                       tool_call_id=tool_call.id)
 
-                self._process_tool_call(response.message, tool_msg_id)
+                self._process_tool_call(response.message, tool_msg_id, on_event=on_event)
 
             except Exception as e:
                 error_msg = f"Error in chat processing: {str(e)}"
+                self._emit_event(on_event, "ERROR", {
+                    "source": {
+                        "name": self.name,
+                        "type": "AGENT"
+                    },
+                    "error_message": error_msg
+                })
+                if is_entry_point:
+                    self._emit_event(on_event, "WORKFLOW_END", {})
                 self.debugger.log(error_msg)
                 raise RuntimeError(error_msg)
 
-    def _process_tool_call(self, message: ChatCompletionMessage, parent_msg_id: Optional[str] = None) -> None:
+    def _process_tool_call(self,
+                           message: ChatCompletionMessage,
+                           parent_msg_id: Optional[str] = None,
+                           on_event: Optional[Callable] = None) -> None:
         """
         Process a tool call from the chat response.
 
         Args:
             message (ChatCompletionMessage): The message containing the tool call.
             parent_msg_id (Optional[str]): ID of the parent message in history.
+            on_event (Optional[Callable]): The event callback function.
 
         Raises:
             ValueError: If the specified tool is not found or if there's an error in processing arguments.
@@ -264,6 +310,17 @@ class Agent(AI):
             self.debugger.log(error_msg, level="error")
             raise ValueError(error_msg)
 
+        self._emit_event(
+            on_event, "AGENT_TOOL_CALL", {
+                "source": {
+                    "name": self.name,
+                    "type": "AGENT"
+                },
+                "tool_name": target_tool_name,
+                "tool_call_id": function_call.id,
+                "arguments": tool_arguments
+            })
+
         target_tool = next((tool for tool in self.tools if tool['metadata']['function']['name'] == target_tool_name),
                            None)
 
@@ -283,6 +340,16 @@ class Agent(AI):
             self.debugger.log(f"Tool execution successful")
             self.debugger.log(f"Tool response: {str(tool_feedback)}")
 
+            self._emit_event(
+                on_event, "AGENT_TOOL_RESPONSE", {
+                    "source": {
+                        "name": target_tool_name,
+                        "type": "TOOL"
+                    },
+                    "tool_call_id": function_call.id,
+                    "result": str(tool_feedback)
+                })
+
             tool_response_msg = {"role": "tool", "content": str(tool_feedback), "tool_call_id": function_call.id}
             self.chat_history.append(tool_response_msg)
 
@@ -295,6 +362,13 @@ class Agent(AI):
 
         except Exception as e:
             error_msg = f"Tool execution failed: {str(e)}"
+            self._emit_event(on_event, "ERROR", {
+                "source": {
+                    "name": target_tool_name,
+                    "type": "TOOL"
+                },
+                "error_message": error_msg
+            })
             self.debugger.log(error_msg, level="error")
             raise RuntimeError(error_msg) from e
 
@@ -448,10 +522,19 @@ class Agent(AI):
                         return str(result)
 
             try:
+                # This logic is now async-aware
                 if transport_type == "sse":
-                    return asyncio.run(_call_sse())
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(_call_sse())
+                    except RuntimeError:
+                        return asyncio.run(_call_sse())
                 elif transport_type == "stdio":
-                    return asyncio.run(_call_stdio())
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(_call_stdio())
+                    except RuntimeError:
+                        return asyncio.run(_call_stdio())
                 else:
                     raise ValueError(f"Unknown MCP transport {transport_type}")
             except Exception as e:
@@ -475,7 +558,7 @@ class Agent(AI):
         """
         return self.chat_history
 
-    def update_mcp_tools(self):
+    async def update_mcp_tools(self):
         """
         Refresh the agent's tools by re-discovering available tools from all MCP servers.
 
@@ -486,7 +569,7 @@ class Agent(AI):
         Raises:
             Exception: For any underlying error in the discovery or registration process.
         """
-        asyncio.run(self._load_mcp_tools())
+        await self._load_mcp_tools()
 
     def _reset_chat_history(self) -> None:
         """Reset chat history to initial state (system message only)."""
