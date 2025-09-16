@@ -3,23 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.js"></script>
+
     <title>XronAI Studio</title>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="chat-container">
-        <header>
-            <h1>XronAI Studio - Live Log</h1>
+    <div class="studio-container">
+        <header class="studio-header">
+            <h1>XronAI Studio</h1>
+            <div class="mode-switcher">
+                <button id="edit-workflow-btn" class="active">Design Mode</button>
+                <button id="start-chat-btn">Chat Mode</button>
+            </div>
         </header>
-        <div id="log" class="log-container">
-            <div class="log-entry event-SYSTEM">Welcome to XronAI Studio. Waiting for connection...</div>
-        </div>
-        <footer>
-            <form id="form" class="chat-form">
-                <input type="text" id="input" placeholder="Type your message..." autocomplete="off" autofocus>
-                <button type="submit">Send</button>
-            </form>
-        </footer>
+
+        <main class="studio-main-content">
+            <div class="workspace-panel">
+                <aside class="icon-toolbar">
+                    <button id="add-supervisor-btn" title="Add Supervisor">S</button>
+                    <button id="add-agent-btn" title="Add Agent">A</button>
+                    <button id="add-user-btn" title="Add User">U</button>
+                    <button id="add-tool-btn" title="Add Tool">T</button>
+                    <button id="add-mcp-btn" title="Add MCP Server">M</button>
+                </aside>
+                <section class="canvas" id="drawflow"></section>
+            </div>
+
+            <div class="resizer" data-direction="vertical"></div>
+
+            <section class="contextual-panel">
+                <div class="configuration-view">
+                     <div class="panel-placeholder">
+                        <h2>Configuration</h2>
+                        <p>Click a node on the canvas to configure its properties here.</p>
+                    </div>
+                </div>
+                <div class="chat-view">
+                    <div id="log" class="log-container"></div>
+                    <footer class="chat-footer">
+                        <form id="form" class="chat-form">
+                            <input type="text" id="input" placeholder="Type your message..." autocomplete="off">
+                            <button type="submit">Send</button>
+                        </form>
+                    </footer>
+                </div>
+            </section>
+        </main>
     </div>
     <script src="/app.js"></script>
 </body>

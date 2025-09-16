@@ -2,6 +2,7 @@ import os
 import typer
 import uvicorn
 import webbrowser
+import asyncio
 from typing_extensions import Annotated
 from typing import Optional
 
@@ -26,13 +27,17 @@ def studio(config: Annotated[Optional[str],
     """
     Launches the XronAI Studio, a web-based UI for building and managing agentic workflows.
     """
-    # --- THIS IS THE KEY CHANGE ---
-    # Set the config path as an environment variable so the FastAPI server can access it.
+    asyncio.run(start_studio_server(config=config, host=host, port=port, no_browser=no_browser, reload=reload))
+
+
+async def start_studio_server(config, host, port, no_browser, reload):
+    """
+    The core async function to configure and run the Uvicorn server.
+    """
     if config:
         os.environ["XRONAI_CONFIG_PATH"] = config
         print(f"INFO:     Will load configuration from: {config}")
     else:
-        # Ensure the variable is not set from a previous run
         if "XRONAI_CONFIG_PATH" in os.environ:
             del os.environ["XRONAI_CONFIG_PATH"]
 
@@ -40,10 +45,19 @@ def studio(config: Annotated[Optional[str],
     base_url = f"http://{host}:{port}"
     print(f"INFO:     Studio will be available at {base_url}")
 
-    if not no_browser and not reload:
-        webbrowser.open_new_tab(base_url)
+    uv_config = uvicorn.Config("studio.server.main:app", host=host, port=port, reload=reload, log_level="info")
 
-    uvicorn.run("studio.server.main:app", host=host, port=port, reload=reload, log_level="info")
+    server = uvicorn.Server(uv_config)
+
+    if not no_browser and not reload:
+
+        async def open_browser_after_delay():
+            await asyncio.sleep(1)
+            webbrowser.open_new_tab(base_url)
+
+        asyncio.create_task(open_browser_after_delay())
+
+    await server.serve()
 
 
 if __name__ == "__main__":

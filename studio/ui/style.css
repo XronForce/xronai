@@ -1,100 +1,97 @@
+/* --- 1. Root Variables & Color Theme --- */
 :root {
-    --background-color: #121212;
-    --surface-color: #1E1E1E;
-    --primary-text-color: #E0E0E0;
-    --secondary-text-color: #A0A0A0;
+    --background-dark: #000000;
+    --background-light: #111111;
+    --surface-color: #1a1a1a;
     --border-color: #333333;
-    --accent-color: #4A90E2;
+    --font-primary: #f2f2f2;
+    --font-secondary: #888888;
+    --accent-color: #ffffff;
+    --accent-hover: #cccccc;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    /* Colors for log entries */
+    --color-user: #3b82f6; --color-delegate: #f59e0b; --color-tool-call: #8b5cf6;
+    --color-tool-response: #06b6d4; --color-agent-response: #d946ef; --color-final: #22c55e;
+    --color-error: #ef4444; --color-system: #888888;
+
+    /* UPDATED: Added colors for new nodes */
+    --color-node-supervisor: #f59e0b; /* Amber */
+    --color-node-agent: #8b5cf6;      /* Violet */
+    --color-node-user: #3b82f6;       /* Blue */
+    --color-node-tool: #22c55e;       /* Green */
+    --color-node-mcp: #ef4444;        /* Red */
+
+    /* UPDATED: Specific colors for ports */
+    --color-port-input: #f59e0b;  /* Amber/Yellow for receiving tasks */
+    --color-port-output: #f2f2f2; /* White for delegating tasks */
 }
 
+/* --- 2. Global Styles --- */
+*, *::before, *::after { box-sizing: border-box; }
 body, html {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: var(--background-color);
-    color: var(--primary-text-color);
+    margin: 0; padding: 0; height: 100vh; width: 100vw;
+    font-family: var(--font-family); background-color: var(--background-dark);
+    color: var(--font-primary); overflow: hidden;
 }
 
-.chat-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    max-width: 900px;
-    margin: 0 auto;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
+/* --- 3-8. (Layout, Mode Switcher, Panels, Chat UI - NO CHANGES) --- */
+.studio-container { display: flex; flex-direction: column; height: 100%; width: 100%; }
+.studio-header { display: flex; justify-content: space-between; align-items: center; padding: 0 24px; height: 60px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+.studio-header h1 { font-size: 1.25rem; font-weight: 600; }
+.mode-switcher button { padding: 8px 16px; font-size: 14px; background-color: transparent; color: var(--font-secondary); border: 1px solid var(--border-color); cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+.mode-switcher button:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-right: none; }
+.mode-switcher button:last-child { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.mode-switcher button.active { background-color: var(--accent-color); color: var(--background-dark); border-color: var(--accent-color); }
+.studio-main-content { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
+.workspace-panel { width: 60%; display: flex; height: 100%; min-width: 400px; flex-grow: 1; }
+.icon-toolbar { display: flex; flex-direction: column; align-items: center; padding: 12px 0; width: 60px; background-color: var(--background-dark); border-right: 1px solid var(--border-color); flex-shrink: 0; }
+.icon-toolbar button { width: 40px; height: 40px; margin-bottom: 12px; font-size: 20px; font-weight: bold; background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--font-secondary); border-radius: 8px; cursor: pointer; }
+.canvas { flex-grow: 1; background-color: var(--background-light); background-image: radial-gradient(var(--border-color) 1px, transparent 1px); background-size: 16px 16px; position: relative; }
+.contextual-panel { width: 40%; min-width: 400px; height: 100%; background-color: var(--background-dark); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 1; }
+.panel-placeholder { padding: 2rem; color: var(--font-secondary); text-align: center; }
+.configuration-view { display: flex; align-items: center; justify-content: center; height: 100%; }
+.chat-view { display: none; }
+.studio-container.chat-mode .configuration-view { display: none; }
+.studio-container.chat-mode .chat-view { display: flex; flex-direction: column; height: 100%; }
+.studio-container.chat-mode .workspace-panel { pointer-events: none; opacity: 0.6; }
+.resizer { width: 5px; background-color: transparent; cursor: col-resize; flex-shrink: 0; position: relative; transition: background-color 0.2s; }
+.resizer:hover { background-color: var(--accent-color); }
+.log-container { flex-grow: 1; overflow-y: auto; padding: 1rem; }
+.log-entry { padding: 0.75rem 1rem; margin-bottom: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background-color: var(--background-light); white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+.log-entry strong { display: block; margin-bottom: 0.5rem; font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.event-USER strong { color: var(--color-user); } .event-SUPERVISOR_DELEGATE strong { color: var(--color-delegate); } .event-AGENT_TOOL_CALL strong { color: var(--color-tool-call); }
+.event-AGENT_TOOL_RESPONSE strong { color: var(--color-tool-response); } .event-AGENT_RESPONSE strong { color: var(--color-agent-response); } .event-FINAL_RESPONSE strong { color: var(--color-final); }
+.event-ERROR strong { color: var(--color-error); } .event-SYSTEM strong { color: var(--color-system); }
+.event-SYSTEM { color: var(--font-secondary); font-style: italic; }
+.chat-footer { padding: 1rem; border-top: 1px solid var(--border-color); flex-shrink: 0; }
+.chat-form { display: flex; }
+#input { flex-grow: 1; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--background-light); color: var(--font-primary); font-size: 1rem; }
+#input:focus { outline: none; border-color: var(--accent-color); }
+.chat-form button { padding: 0.75rem 1.5rem; margin-left: 0.75rem; border: none; border-radius: 8px; background-color: var(--accent-color); color: var(--background-dark); font-size: 1rem; font-weight: 600; cursor: pointer; }
 
-header {
-    padding: 1rem;
-    background-color: var(--surface-color);
-    border-bottom: 1px solid var(--border-color);
-    text-align: center;
-}
+/* ========================================================================= */
+/* --- 9. UPDATED Drawflow Node & Connection Styles --- */
+/* ========================================================================= */
+.drawflow-node { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 250px !important; font-family: var(--font-family); color: var(--font-primary); padding: 0 !important; }
+.drawflow-node.selected { border-color: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color); }
+.drawflow-node .drawflow_content_node .node-content { display: flex; align-items: center; padding: 12px; }
+.node-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 6px; margin-right: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
+.node-text { flex-grow: 1; }
+.node-title { font-size: 14px; font-weight: 600; color: var(--font-primary); margin-bottom: 2px; }
+.node-subtitle { font-size: 12px; color: var(--font-secondary); }
 
-.log-container {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    background-color: var(--background-color);
-}
+/* Specific styling for ALL node types */
+.drawflow-node.supervisor .node-icon { background-color: var(--color-node-supervisor); color: var(--background-dark); }
+.drawflow-node.agent .node-icon { background-color: var(--color-node-agent); color: var(--background-dark); }
+.drawflow-node.user .node-icon { background-color: var(--color-node-user); color: var(--background-dark); }
+.drawflow-node.tool .node-icon { background-color: var(--color-node-tool); color: var(--background-dark); }
+.drawflow-node.mcp .node-icon { background-color: var(--color-node-mcp); color: var(--background-dark); }
 
-.log-entry {
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--surface-color);
-    white-space: pre-wrap; /* Allows formatting like newlines */
-    word-wrap: break-word;
-}
+/* UPDATED: Specific styling for Input/Output Ports */
+.drawflow-node .input, .drawflow-node .output { border: 2px solid var(--surface-color); width: 16px; height: 16px; border-radius: 50%; position: absolute; top: 50%; transform: translateY(-50%); }
+.drawflow-node .input { background: var(--color-port-input); left: -9px; }
+.drawflow-node .output { background: var(--color-port-output); right: -9px; }
 
-.log-entry strong {
-    color: var(--accent-color);
-    display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.9em;
-}
-
-/* Event Specific Styling */
-.event-USER { border-left: 3px solid #4CAF50; }
-.event-SUPERVISOR_DELEGATE { border-left: 3px solid #FFC107; background-color: #2a2a2a; }
-.event-AGENT_TOOL_CALL { border-left: 3px solid #9C27B0; background-color: #2c2c2c; }
-.event-AGENT_TOOL_RESPONSE { border-left: 3px solid #03A9F4; background-color: #2a2a2a; }
-.event-AGENT_RESPONSE { border-left: 3px solid #795548; }
-.event-FINAL_RESPONSE { border-left: 3px solid #4CAF50; font-weight: bold; }
-.event-ERROR { border-left: 3px solid #F44336; color: #F44336; }
-.event-SYSTEM, .event-CONFIRMATION { color: var(--secondary-text-color); font-style: italic; }
-
-.chat-form {
-    display: flex;
-    padding: 1rem;
-    border-top: 1px solid var(--border-color);
-    background-color: var(--surface-color);
-}
-
-#input {
-    flex-grow: 1;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: #252525;
-    color: var(--primary-text-color);
-    font-size: 1rem;
-}
-
-#input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-}
-
-button {
-    padding: 0.75rem 1.5rem;
-    margin-left: 0.75rem;
-    border: none;
-    border-radius: 8px;
-    background-color: var(--accent-color);
-    color: white;
-    font-size: 1rem;
-    cursor: pointer;
-}
+/* Connection Lines */
+.drawflow .drawflow-connection .main-path { stroke-width: 2px; stroke: var(--font-secondary); filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
