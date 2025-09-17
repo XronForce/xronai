@@ -2,208 +2,159 @@ document.addEventListener("DOMContentLoaded", () => {
     const studioContainer = document.querySelector(".studio-container");
     const editWorkflowBtn = document.getElementById("edit-workflow-btn");
     const startChatBtn = document.getElementById("start-chat-btn");
-    const resizer = document.querySelector(".resizer");
-    const workspacePanel = document.querySelector(".workspace-panel");
-    const contextualPanel = document.querySelector(".contextual-panel");
     const log = document.getElementById("log");
     const form = document.getElementById("form");
     const input = document.getElementById("input");
     const configurationView = document.querySelector('.configuration-view');
-
-    const originalPlaceholder = configurationView.innerHTML; // Store the initial placeholder
+    const originalPlaceholder = configurationView.innerHTML;
     
-    addLogEntry("event-SYSTEM", "Welcome to XronAI Studio. Please switch to Chat Mode to connect.");
-    
-    // =========================================================================
-    // 1. CANVAS/DRAWFLOW SETUP
-    // =========================================================================
-    console.log("[DEBUG] 1. Script start. Preparing to create Drawflow editor.");
     const canvasElement = document.getElementById('drawflow');
     const editor = new Drawflow(canvasElement);
-    console.log("[DEBUG] 2. Drawflow object created:", editor);
-    
     editor.reroute = true;
     editor.reroute_fix_curvature = true;
     editor.force_first_input = false;
-    
     editor.start();
-    console.log("[DEBUG] 3. editor.start() has been called.");
 
-    // =========================================================================
-    // 2. WORKFLOW LOADING AND RENDERING
-    // =========================================================================
-    async function loadAndRenderWorkflow() {
-        console.log("[DEBUG] 5. loadAndRenderWorkflow() function has started.");
-        try {
-            const response = await fetch('/api/v1/workflow');
-            if (!response.ok) {
-                throw new Error(`Failed to fetch workflow: ${response.statusText}`);
-            }
-            const graph = await response.json();
-            console.log("[DEBUG] 6. Received workflow data from backend:", graph);
-
-            editor.clear();
-
-            if (graph.nodes && graph.nodes.length > 0) {
-                console.log("[DEBUG] 7. Starting to add nodes to canvas...");
-                graph.nodes.forEach(node => {
-                    const icon = node.data.title.charAt(0);
-                    const content = `<div class="node-content"><div class="node-icon">${icon}</div><div class="node-text"><div class="node-title">${node.data.title}</div><div class="node-subtitle">${node.data.subtitle}</div></div></div>`;
-                    let inputs = 0, outputs = 0;
-                    switch (node.type) {
-                        case 'supervisor': inputs = 1; outputs = 1; break;
-                        case 'agent': inputs = 1; outputs = 1; break;
-                        case 'user': inputs = 0; outputs = 1; break;
-                        case 'tool': case 'mcp': inputs = 1; outputs = 0; break;
-                    }
-                    editor.addNode(node.id, inputs, outputs, node.pos_x, node.pos_y, node.type, {}, content);
-                });
-                console.log("[DEBUG] 8. Finished adding nodes.");
-
-                graph.edges.forEach(edge => {
-                    const sourceNode = editor.getNodeFromId(editor.getNodesFromName(edge.source)[0]);
-                    const targetNode = editor.getNodeFromId(editor.getNodesFromName(edge.target)[0]);
-                    if (sourceNode && targetNode) {
-                        editor.addConnection(sourceNode.id, targetNode.id, 'output_1', 'input_1');
-                    }
-                });
-                console.log("[DEBUG] 9. Finished adding connections.");
-            } else {
-                 console.log("[DEBUG] 7. No nodes to render.");
-            }
-        } catch (error) {
-            console.error("Error loading workflow:", error);
-            addLogEntry("event-ERROR", `Could not load workflow graph: ${error.message}`);
-        }
+    function addLogEntry(className, content) {
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${className}`;
+        entry.innerHTML = content;
+        log.appendChild(entry);
+        log.scrollTop = log.scrollHeight;
     }
 
     // =========================================================================
-    // 2.5. NEW: NODE INSPECTOR LOGIC
+    // Core Logic: The "Compile on Demand" model
     // =========================================================================
-    async function displayNodeDetails(nodeName) {
-        try {
-            const response = await fetch(`/api/v1/nodes/${nodeName}`);
-            if (!response.ok) {
-                throw new Error(`Node not found: ${response.statusText}`);
-            }
-            const details = await response.json();
 
-            let toolsHtml = '<li>None</li>';
-            if (details.tools && details.tools.length > 0) {
-                toolsHtml = details.tools.map(tool => `<li>${tool}</li>`).join('');
-            }
-
-            const detailsHtml = `
-                <div class="config-content">
-                    <div class="config-header">
-                        <span class="node-type-badge ${details.type}">${details.type}</span>
-                        <h2>${details.name}</h2>
-                    </div>
-                    <div class="config-section">
-                        <h3>System Message</h3>
-                        <p>${details.system_message || '<em>Not set</em>'}</p>
-                    </div>
-                    <div class="config-section">
-                        <h3>Tools</h3>
-                        <ul>${toolsHtml}</ul>
-                    </div>
-                </div>
-            `;
-            configurationView.innerHTML = detailsHtml;
-
-        } catch (error) {
-            console.error("Failed to fetch node details:", error);
-            configurationView.innerHTML = `<div class="panel-placeholder"><p>Could not load details for this node.</p></div>`;
-        }
-    }
-
-    function resetConfigPanel() {
-        configurationView.innerHTML = originalPlaceholder;
-    }
-
-    editor.on('nodeSelected', (id) => {
-        const node = editor.getNodeFromId(id);
-        if (node && node.name) {
-            displayNodeDetails(node.name);
-        }
-    });
-
-    editor.on('nodeUnselected', () => {
-        resetConfigPanel();
-    });
-
-    // =========================================================================
-    // 3. MODE SWITCHING LOGIC
-    // =========================================================================
     function setMode(mode) {
         if (mode === 'chat') {
-            studioContainer.classList.add('chat-mode');
-            startChatBtn.classList.add('active');
-            editWorkflowBtn.classList.remove('active');
-            setCanvasLock(true);
-            connectWebSocket();
+            compileAndStartChat();
         } else { // 'design' mode
             studioContainer.classList.remove('chat-mode');
             editWorkflowBtn.classList.add('active');
             startChatBtn.classList.remove('active');
-            setCanvasLock(false);
+            editor.editor_mode = 'edit';
             disconnectWebSocket();
         }
     }
-    editWorkflowBtn.addEventListener('click', () => setMode('design'));
-    startChatBtn.addEventListener('click', () => setMode('chat'));
-    
-    function setCanvasLock(isLocked) {
-        editor.editor_mode = isLocked ? 'fixed' : 'edit';
+
+    async function compileAndStartChat() {
+        addLogEntry("event-SYSTEM", "Compiling workflow...");
+        const workflowData = editor.export();
+        console.log("Exported workflow for compilation:", workflowData);
+
+        try {
+            const response = await fetch('/api/v1/workflow/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(workflowData),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || "Unknown compilation error.");
+            }
+
+            addLogEntry("event-SYSTEM", "Compilation successful. Starting chat mode.");
+            studioContainer.classList.add('chat-mode');
+            startChatBtn.classList.add('active');
+            editWorkflowBtn.classList.remove('active');
+            editor.editor_mode = 'fixed';
+            connectWebSocket();
+
+        } catch (error) {
+            console.error("Compilation failed:", error);
+            addLogEntry("event-ERROR", `<b>Compilation Failed:</b> ${error.message}`);
+            alert(`Could not start chat. Please fix the workflow.\n\nError: ${error.message}`);
+        }
     }
 
     // =========================================================================
-    // 4. PANEL RESIZING LOGIC
+    // Node Management and Configuration
     // =========================================================================
-    let isResizing = false;
-    resizer.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'col-resize';
-        const startX = e.clientX;
-        const startWorkspaceWidth = workspacePanel.offsetWidth;
-        function handleMouseMove(e) {
-            if (!isResizing) return;
-            const deltaX = e.clientX - startX;
-            const newWorkspaceWidth = startWorkspaceWidth + deltaX;
-            const totalWidth = studioContainer.offsetWidth;
-            const newWorkspacePercentage = (newWorkspaceWidth / totalWidth) * 100;
-            workspacePanel.style.width = `${newWorkspacePercentage}%`;
-            contextualPanel.style.width = `${100 - newWorkspacePercentage}%`;
+    
+    // Add a default workflow for a better starting experience
+    function loadDefaultWorkflow() {
+        editor.clear();
+        const userNode = { name: "user-entry", class: "user", data: {}, html: "User", typenode: false, inputs: {}, outputs: {"output_1":{"connections":[]}}, pos_x: 200, pos_y: 200};
+        const agentNode = { name: "DefaultAgent", class: "agent", data: { system_message: "You are a helpful assistant." }, html: "DefaultAgent", typenode: false, inputs: {"input_1":{"connections":[]}}, outputs: {"output_1":{"connections":[]}}, pos_x: 500, pos_y: 200};
+        
+        const userNodeId = editor.addNode(userNode.name, 0, 1, userNode.pos_x, userNode.pos_y, userNode.class, userNode.data, userNode.html);
+        const agentNodeId = editor.addNode(agentNode.name, 1, 1, agentNode.pos_x, agentNode.pos_y, agentNode.class, agentNode.data, agentNode.html);
+        
+        editor.addConnection(userNodeId, agentNodeId, "output_1", "input_1");
+    }
+
+    function addNode(type, title) {
+        const nodeName = `${title}_${Math.floor(Math.random() * 1000)}`;
+        const system_message = `You are the ${nodeName} ${type}.`;
+        
+        // Inputs/outputs based on type
+        const inputs = (type === 'user') ? 0 : 1;
+        const outputs = (type === 'tool' || type === 'mcp') ? 0 : 1;
+
+        editor.addNode(nodeName, inputs, outputs, 300, 150, type, { system_message }, title);
+    }
+    
+    editor.on('nodeSelected', id => {
+        const node = editor.getNodeFromId(id);
+        if (node.name === 'user-entry') {
+            configurationView.innerHTML = `<div class="config-content"><div class="config-header"><span class="node-type-badge user">User</span><h2>User</h2></div><p>This is the entry point for the user's chat message.</p></div>`;
+            return;
         }
-        function handleMouseUp() {
-            isResizing = false;
-            document.body.style.userSelect = '';
-            document.body.style.cursor = '';
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+
+        const systemMessage = node.data.system_message || `You are ${node.name}.`;
+        configurationView.innerHTML = `
+            <div class="config-content">
+                <div class="config-header"><span class="node-type-badge ${node.class}">${node.class}</span><h2>${node.name}</h2></div>
+                <div class="config-section"><h3>System Message</h3><textarea id="system-message-input" class="config-textarea">${systemMessage}</textarea></div>
+                <div class="config-actions">
+                     <button id="save-node-btn" class="action-btn save">Save Changes</button>
+                     <button id="delete-node-btn" class="action-btn delete">Delete Node</button>
+                </div>
+            </div>`;
+        
+        document.getElementById('save-node-btn').addEventListener('click', () => {
+            const newSystemMessage = document.getElementById('system-message-input').value;
+            editor.updateNodeDataFromId(id, { system_message: newSystemMessage });
+            alert('Node data updated locally. Compile to apply changes.');
+        });
+        document.getElementById('delete-node-btn').addEventListener('click', () => {
+            if (confirm(`Delete node "${node.name}"?`)) {
+                editor.removeNodeId(`node-${id}`);
+                resetConfigPanel();
+            }
+        });
+    });
+
+    function resetConfigPanel() { configurationView.innerHTML = originalPlaceholder; }
+    editor.on('nodeUnselected', resetConfigPanel);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Delete' && editor.selected_nodes.length > 0) {
+            editor.removeNodeId(`node-${editor.selected_nodes[0]}`);
+            resetConfigPanel();
         }
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
     });
 
     // =========================================================================
-    // 5. WEBSOCKET CHAT LOGIC
+    // WebSocket Chat Logic
     // =========================================================================
     let ws = null;
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
         ws = new WebSocket(`ws://${window.location.host}/ws`);
         ws.onopen = () => addLogEntry("event-SYSTEM", "Connection established. Ready to chat.");
-        ws.onclose = () => {
+        ws.onclose = (event) => {
             if (studioContainer.classList.contains('chat-mode')) {
-                 addLogEntry("event-ERROR", "Connection closed. Please refresh or try re-entering Chat Mode.");
+                addLogEntry("event-ERROR", `Connection closed unexpectedly. Reason: ${event.reason || "Unknown"}`);
             }
             ws = null;
         };
-        ws.onerror = () => addLogEntry("event-ERROR", `WebSocket Error: Could not connect to the server.`);
+        ws.onerror = () => addLogEntry("event-ERROR", `WebSocket Error: Could not connect.`);
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            // Same message handling logic as before...
             let content = '';
             switch (data.type) {
                 case "WORKFLOW_START": content = `<strong>USER QUERY</strong><p>${data.data.user_query}</p>`; addLogEntry("event-USER", content); break;
@@ -217,82 +168,22 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
     }
-    function disconnectWebSocket() {
-        if (ws) {
-            ws.close();
-            addLogEntry("event-SYSTEM", "Connection closed. Entering Design Mode.");
-        }
-    }
-    function addLogEntry(className, content) {
-        const entry = document.createElement("div");
-        entry.className = `log-entry ${className}`;
-        entry.innerHTML = content;
-        log.appendChild(entry);
-        log.scrollTop = log.scrollHeight;
-    }
-    form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const message = input.value;
-        if (message && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(message);
-            input.value = '';
-        } else if (!ws || ws.readyState !== WebSocket.OPEN) {
-            addLogEntry("event-ERROR", "Cannot send message. Not connected.");
-        }
+    function disconnectWebSocket() { if (ws) { ws.close(); addLogEntry("event-SYSTEM", "Disconnected. Entering Design Mode."); } }
+    
+    form.addEventListener("submit", e => {
+        e.preventDefault();
+        if (input.value && ws && ws.readyState === WebSocket.OPEN) { ws.send(input.value); input.value = ''; }
     });
 
     // =========================================================================
-    // 6. TOOLBAR & NODE CREATION LOGIC
+    // Initialization
     // =========================================================================
-    const addSupervisorBtn = document.getElementById('add-supervisor-btn');
-    const addAgentBtn = document.getElementById('add-agent-btn');
-    const addUserBtn = document.getElementById('add-user-btn');
-    const addToolBtn = document.getElementById('add-tool-btn');
-    const addMcpBtn = document.getElementById('add-mcp-btn');
+    editWorkflowBtn.addEventListener('click', () => setMode('design'));
+    startChatBtn.addEventListener('click', () => setMode('chat'));
+    document.getElementById('add-supervisor-btn').addEventListener('click', () => addNode('supervisor', 'Supervisor'));
+    document.getElementById('add-agent-btn').addEventListener('click', () => addNode('agent', 'Agent'));
     
-    let nodeCounter = 0;
-
-    addSupervisorBtn.addEventListener('click', () => addNode('supervisor', 'Supervisor', 'Manages agents'));
-    addAgentBtn.addEventListener('click', () => addNode('agent', 'Agent', 'Performs tasks'));
-    addUserBtn.addEventListener('click', () => addNode('user', 'User', 'Workflow entry point'));
-    addToolBtn.addEventListener('click', () => addNode('tool', 'Tool', 'Executes a function'));
-    addMcpBtn.addEventListener('click', () => addNode('mcp', 'MCP Server', 'Connects to remote tools'));
-
-    function addNode(type, title, subtitle) {
-        if (editor.editor_mode === 'fixed') return;
-
-        nodeCounter++;
-        const nodeName = `${title}_${nodeCounter}`; 
-        const icon = title.charAt(0);
-
-        const content = `
-            <div class="node-content">
-                <div class="node-icon">${icon}</div>
-                <div class="node-text">
-                    <div class="node-title">${title}</div>
-                    <div class="node-subtitle">${subtitle}</div>
-                </div>
-            </div>
-        `;
-        
-        let inputs = 0, outputs = 0;
-        switch (type) {
-            case 'supervisor': inputs = 1; outputs = 1; break;
-            case 'agent': inputs = 1; outputs = 1; break;
-            case 'user': inputs = 0; outputs = 1; break;
-            case 'tool': case 'mcp': inputs = 1; outputs = 0; break;
-        }
-
-        editor.addNode(nodeName, inputs, outputs, 150, 50, type, {}, content);
-    }
-    
-    // =========================================================================
-    // 7. INITIALIZATION
-    // =========================================================================
     setMode('design');
-    
-    console.log("[DEBUG] 4. Calling setTimeout to queue workflow loading.");
-    setTimeout(() => {
-        loadAndRenderWorkflow();
-    }, 0);
+    loadDefaultWorkflow();
+    addLogEntry("event-SYSTEM", "Welcome to XronAI Studio. Design your workflow, then switch to Chat Mode.");
 });

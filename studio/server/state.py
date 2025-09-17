@@ -1,93 +1,133 @@
 import os
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 from dotenv import load_dotenv
 
 from xronai.core import Supervisor, Agent
-from xronai.config import AgentFactory, load_yaml_config
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
 
 
 class StateManager:
     """
     Manages the in-memory state of the XronAI workflow for the studio server.
+    Follows a "Compile on Demand" model where the entire workflow is rebuilt
+    from a frontend graph snapshot.
     """
 
     def __init__(self):
-        self.root_node: Optional[Union[Supervisor, Agent]] = None
-        self.is_default: bool = False
-        self.config_path: Optional[str] = os.getenv("XRONAI_CONFIG_PATH")
-
-    async def load_workflow(self):
-        """
-        Loads the workflow into memory from a config file or creates a default.
-        """
-        if self.config_path and os.path.exists(self.config_path):
-            try:
-                logger.info(f"Loading workflow from configuration: {self.config_path}")
-                config = load_yaml_config(self.config_path)
-                self.root_node = await AgentFactory.create_from_config(config)
-                self.is_default = False
-                logger.info(f"Successfully loaded supervisor: {self.root_node.name}")
-            except Exception as e:
-                logger.error(f"Failed to load workflow from {self.config_path}: {e}", exc_info=True)
-                await self._load_default_workflow()
-        else:
-            logger.info("No configuration file provided. Loading default blank canvas workflow.")
-            await self._load_default_workflow()
-
-    async def _load_default_workflow(self):
-        """
-        Creates a simple, single-agent workflow as a default starter template.
-        """
-        self.root_node = Agent(
-            name="DefaultAgent",
-            llm_config={
-                "model": os.getenv("LLM_MODEL", "default-model"),
-                "api_key": os.getenv("LLM_API_KEY", "default-key"),
-                "base_url": os.getenv("LLM_BASE_URL", "default-url"),
-            },
-            workflow_id="blank-canvas-session",
-            system_message="You are a helpful assistant. You are the starting point for a new workflow.")
-        self.is_default = True
-        await self.root_node._load_mcp_tools()
-        logger.info("Loaded default single-agent workflow.")
+        self.chat_entry_point: Optional[Union[Supervisor, Agent]] = None
+        self.llm_config: Dict[str, str] = {
+            "model": os.getenv("LLM_MODEL", "default-model"),
+            "api_key": os.getenv("LLM_API_KEY", "default-key"),
+            "base_url": os.getenv("LLM_BASE_URL", "default-url"),
+        }
+        self.workflow_id: str = "studio-session"
 
     def get_root_node(self) -> Optional[Union[Supervisor, Agent]]:
-        return self.root_node
+        """Returns the current, compiled entry point for chat."""
+        return self.chat_entry_point
 
     def find_node_by_id(self, node_id: str) -> Optional[Union[Supervisor, Agent]]:
-        """
-        Finds a node (Agent or Supervisor) within the loaded workflow by its unique ID (name).
-        
-        Args:
-            node_id: The unique name of the node to find.
-
-        Returns:
-            The Agent or Supervisor object if found, otherwise None.
-        """
-        if not self.root_node:
+        """Finds any node within the compiled workflow, used for inspection."""
+        if not self.chat_entry_point:
             return None
 
-        # Use a queue for a breadth-first search through the graph
-        q = [self.root_node]
-        visited = {self.root_node.name}
+        q = [self.chat_entry_point]
+        visited = {self.chat_entry_point.name}
 
         while q:
-            current_node = q.pop(0)
-            if current_node.name == node_id:
-                return current_node  # Node found
-
-            if isinstance(current_node, Supervisor):
-                for child in current_node.registered_agents:
+            current = q.pop(0)
+            if current.name == node_id:
+                return current
+            if isinstance(current, Supervisor):
+                for child in current.registered_agents:
                     if child.name not in visited:
                         visited.add(child.name)
                         q.append(child)
+        return None
 
-        return None  # Node not found in the entire graph
+    def compile_workflow_from_json(self, drawflow_export: Dict[str, Any]) -> None:
+        """
+        Builds a new, runnable workflow from a Drawflow JSON export.
+        This is the core "compilation" step.
+        """
+        self.chat_entry_point = None
+        all_nodes: Dict[str, Union[Supervisor, Agent]] = {}
 
-    def is_default_workflow(self) -> bool:
-        return self.is_default
+        drawflow_data = drawflow_export.get("drawflow", {}).get("Home", {}).get("data", {})
+        if not drawflow_data:
+            raise ValueError("Invalid or empty Drawflow export data.")
+
+        # 1. Instantiate all nodes from the graph
+        for node_id, node_info in drawflow_data.items():
+            name = node_info["name"]
+            node_type = node_info["class"]
+            # The system message is stored inside the node's data object
+            system_message = node_info.get("data", {}).get("system_message", f"You are {name}.")
+
+            if name in all_nodes or name == 'user-entry':
+                continue
+
+            if node_type == "agent":
+                new_node = Agent(name=name, llm_config=self.llm_config, system_message=system_message)
+                new_node.set_workflow_id(self.workflow_id)
+                all_nodes[name] = new_node
+            elif node_type == "supervisor":
+                new_node = Supervisor(name=name,
+                                      llm_config=self.llm_config,
+                                      is_assistant=True,
+                                      system_message=system_message)
+                new_node.set_workflow_id(self.workflow_id)
+                all_nodes[name] = new_node
+
+        # 2. Find the entry point and build the hierarchy from connections
+        user_node_id = next((nid for nid, n in drawflow_data.items() if n["name"] == "user-entry"), None)
+        if not user_node_id:
+            raise ValueError("Workflow must have a User node as an entry point.")
+
+        # *** THIS IS THE FIX ***
+        # Explicitly get the user node's data and check its connections.
+        user_node_info = drawflow_data.get(user_node_id)
+        if not user_node_info:
+            raise ValueError("Could not find user node data in the export.")
+
+        entry_point_node_name = None
+        user_outputs = user_node_info.get("outputs", {}).get("output_1", {}).get("connections", [])
+
+        if user_outputs:
+            first_connection = user_outputs[0]
+            connected_node_id = first_connection["node"]
+            connected_node_info = drawflow_data.get(connected_node_id)
+            if connected_node_info:
+                entry_point_node_name = connected_node_info["name"]
+
+        if not entry_point_node_name:
+            raise ValueError("User node is not connected to any agent or supervisor.")
+
+        self.chat_entry_point = all_nodes.get(entry_point_node_name)
+        if not self.chat_entry_point:
+            raise ValueError(f"Entry point node '{entry_point_node_name}' could not be found.")
+
+        # Make the root supervisor a main supervisor
+        if isinstance(self.chat_entry_point, Supervisor):
+            self.chat_entry_point.is_assistant = False
+
+        # 3. Register agents based on all other connections
+        for node_id, node_info in drawflow_data.items():
+            source_name = node_info["name"]
+            source_node = all_nodes.get(source_name)
+            if not isinstance(source_node, Supervisor):
+                continue
+
+            for conn in node_info.get("outputs", {}).get("output_1", {}).get("connections", []):
+                target_node_info = drawflow_data.get(conn["node"])
+                if target_node_info:
+                    target_name = target_node_info["name"]
+                    target_node = all_nodes.get(target_name)
+                    if target_node:
+                        source_node.register_agent(target_node)
+                        logger.info(f"Successfully registered '{target_name}' to supervisor '{source_name}'.")
+
+        logger.info(f"Workflow compiled successfully. Entry point is '{self.chat_entry_point.name}'.")

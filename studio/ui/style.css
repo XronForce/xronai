@@ -157,3 +157,48 @@ body, html {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
     font-size: 0.9rem;
 }
+
+/* --- 11. NEW: Configuration Panel Action Styles --- */
+.config-textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--background-light);
+    color: var(--font-primary);
+    font-size: 14px;
+    font-family: var(--font-family);
+    resize: vertical;
+}
+.config-textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+.config-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.75rem;
+}
+.action-btn {
+    flex-grow: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.action-btn:hover {
+    opacity: 0.85;
+}
+.action-btn.save {
+    background-color: var(--accent-color);
+    color: var(--background-dark);
+}
+.action-btn.delete {
+    background-color: #444;
+    color: var(--color-error);
+    border: 1px solid var(--color-error);
+}
