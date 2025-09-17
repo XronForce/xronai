@@ -1,8 +1,10 @@
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
+
+from xronai.core import Supervisor, Agent
 
 from studio.server.state import StateManager
 from studio.server.graph_utils import build_graph_from_workflow, GRAPH_MARGIN_X, GRAPH_MARGIN_Y, X_SPACING
@@ -87,6 +89,33 @@ async def get_workflow_graph():
     graph["edges"].insert(0, {"source": "user-entry", "target": root_node.name})
 
     return graph
+
+
+@app.get("/api/v1/nodes/{node_id}")
+async def get_node_details(node_id: str):
+    """
+    Returns the detailed configuration of a specific node by its ID (name).
+    """
+    if node_id == "user-entry":
+        return {
+            "name": "User",
+            "type": "user",
+            "system_message": "This is the starting point of the workflow. It represents the user's input.",
+            "tools": []
+        }
+
+    node = state_manager.find_node_by_id(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node with ID '{node_id}' not found.")
+
+    node_type = "supervisor" if isinstance(node, Supervisor) else "agent"
+
+    # Extract tool names if the node is an Agent and has tools
+    tools_list = []
+    if isinstance(node, Agent) and node.tools:
+        tools_list = [tool['metadata']['function']['name'] for tool in node.tools]
+
+    return {"name": node.name, "type": node_type, "system_message": node.system_message, "tools": tools_list}
 
 
 @app.websocket("/ws")

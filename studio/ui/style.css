@@ -95,3 +95,65 @@ body, html {
 
 /* Connection Lines */
 .drawflow .drawflow-connection .main-path { stroke-width: 2px; stroke: var(--font-secondary); filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+
+/* --- 10. NEW: Configuration Panel Styles --- */
+.config-content {
+    width: 100%;
+    height: 100%;
+    padding: 1.5rem;
+    text-align: left;
+    overflow-y: auto;
+}
+.config-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.config-header h2 {
+    margin: 0 0 0 1rem;
+    font-size: 1.25rem;
+}
+.node-type-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--background-dark);
+}
+.node-type-badge.supervisor { background-color: var(--color-node-supervisor); }
+.node-type-badge.agent { background-color: var(--color-node-agent); }
+.node-type-badge.user { background-color: var(--color-node-user); }
+
+.config-section {
+    margin-bottom: 1.5rem;
+}
+.config-section h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--font-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+.config-section p {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--font-primary);
+    white-space: pre-wrap;
+}
+.config-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.config-section li {
+    background-color: var(--surface-color);
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    font-size: 0.9rem;
+}

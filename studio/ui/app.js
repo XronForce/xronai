@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const log = document.getElementById("log");
     const form = document.getElementById("form");
     const input = document.getElementById("input");
+    const configurationView = document.querySelector('.configuration-view');
+
+    const originalPlaceholder = configurationView.innerHTML; // Store the initial placeholder
     
     addLogEntry("event-SYSTEM", "Welcome to XronAI Studio. Please switch to Chat Mode to connect.");
     
@@ -73,6 +76,61 @@ document.addEventListener("DOMContentLoaded", () => {
             addLogEntry("event-ERROR", `Could not load workflow graph: ${error.message}`);
         }
     }
+
+    // =========================================================================
+    // 2.5. NEW: NODE INSPECTOR LOGIC
+    // =========================================================================
+    async function displayNodeDetails(nodeName) {
+        try {
+            const response = await fetch(`/api/v1/nodes/${nodeName}`);
+            if (!response.ok) {
+                throw new Error(`Node not found: ${response.statusText}`);
+            }
+            const details = await response.json();
+
+            let toolsHtml = '<li>None</li>';
+            if (details.tools && details.tools.length > 0) {
+                toolsHtml = details.tools.map(tool => `<li>${tool}</li>`).join('');
+            }
+
+            const detailsHtml = `
+                <div class="config-content">
+                    <div class="config-header">
+                        <span class="node-type-badge ${details.type}">${details.type}</span>
+                        <h2>${details.name}</h2>
+                    </div>
+                    <div class="config-section">
+                        <h3>System Message</h3>
+                        <p>${details.system_message || '<em>Not set</em>'}</p>
+                    </div>
+                    <div class="config-section">
+                        <h3>Tools</h3>
+                        <ul>${toolsHtml}</ul>
+                    </div>
+                </div>
+            `;
+            configurationView.innerHTML = detailsHtml;
+
+        } catch (error) {
+            console.error("Failed to fetch node details:", error);
+            configurationView.innerHTML = `<div class="panel-placeholder"><p>Could not load details for this node.</p></div>`;
+        }
+    }
+
+    function resetConfigPanel() {
+        configurationView.innerHTML = originalPlaceholder;
+    }
+
+    editor.on('nodeSelected', (id) => {
+        const node = editor.getNodeFromId(id);
+        if (node && node.name) {
+            displayNodeDetails(node.name);
+        }
+    });
+
+    editor.on('nodeUnselected', () => {
+        resetConfigPanel();
+    });
 
     // =========================================================================
     // 3. MODE SWITCHING LOGIC

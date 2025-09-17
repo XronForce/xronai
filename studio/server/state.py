@@ -59,5 +59,35 @@ class StateManager:
     def get_root_node(self) -> Optional[Union[Supervisor, Agent]]:
         return self.root_node
 
+    def find_node_by_id(self, node_id: str) -> Optional[Union[Supervisor, Agent]]:
+        """
+        Finds a node (Agent or Supervisor) within the loaded workflow by its unique ID (name).
+        
+        Args:
+            node_id: The unique name of the node to find.
+
+        Returns:
+            The Agent or Supervisor object if found, otherwise None.
+        """
+        if not self.root_node:
+            return None
+
+        # Use a queue for a breadth-first search through the graph
+        q = [self.root_node]
+        visited = {self.root_node.name}
+
+        while q:
+            current_node = q.pop(0)
+            if current_node.name == node_id:
+                return current_node  # Node found
+
+            if isinstance(current_node, Supervisor):
+                for child in current_node.registered_agents:
+                    if child.name not in visited:
+                        visited.add(child.name)
+                        q.append(child)
+
+        return None  # Node not found in the entire graph
+
     def is_default_workflow(self) -> bool:
         return self.is_default
