@@ -1,5 +1,3 @@
-// FILE: studio/ui/app.js
-
 document.addEventListener("DOMContentLoaded", () => {
     // --- Initial Setup ---
     const studioContainer = document.querySelector(".studio-container");
@@ -80,7 +78,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // =========================================================================
     function loadDefaultWorkflow() {
         editor.clear();
-        // The name is now part of the data object
         const userData = { uuid: 'user-entry-uuid', name: 'User' };
         const agentData = { uuid: uuidv4(), name: 'DefaultAgent', system_message: 'You are a helpful assistant.', keep_history: true };
 
@@ -92,18 +89,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function addNode(type, title) {
         const baseName = `${title}_${Math.floor(Math.random() * 1000)}`;
-        const nodeData = {
-            uuid: uuidv4(),
-            name: baseName,
-            system_message: `You are the ${baseName} ${type}.`,
-            // Set sensible defaults
-            use_agents: true,
-            keep_history: true,
-            output_schema: "",
-            strict: false,
-        };
-        const inputs = (type === 'user') ? 0 : 1;
-        const outputs = (type === 'tool' || type === 'mcp') ? 0 : 1;
+        let nodeData = { uuid: uuidv4(), name: baseName };
+        let inputs = 1;
+        let outputs = 1;
+
+        // Customize defaults based on node type
+        switch (type) {
+            case 'supervisor':
+                nodeData.system_message = `You are the ${baseName} supervisor.`;
+                nodeData.use_agents = true;
+                break;
+            case 'agent':
+                nodeData.system_message = `You are the ${baseName} agent.`;
+                nodeData.keep_history = true;
+                nodeData.output_schema = "";
+                nodeData.strict = false;
+                break;
+            case 'user':
+                inputs = 0;
+                break;
+            case 'mcp':
+                nodeData.type = 'sse'; // Default MCP type
+                nodeData.url = 'http://localhost:8000/sse';
+                nodeData.script_path = 'path/to/your/server.py';
+                nodeData.auth_token = '';
+                outputs = 0; // MCP nodes have inputs only
+                break;
+        }
+
+        // The 'class' parameter is what Drawflow uses for styling and identification
         editor.addNode(baseName, inputs, outputs, 300, 150, type, nodeData, title);
     }
     
@@ -116,7 +130,85 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Build the configuration panel HTML dynamically
+        // --- FIX: Added the missing configuration panel logic for MCP nodes ---
+        if (node.class === 'mcp') {
+            let panelHtml = `
+            <div class="config-content">
+                <div class="config-header">
+                    <span class="node-type-badge mcp">MCP Server</span>
+                </div>
+                <div class="config-section">
+                    <h3>Name</h3>
+                    <input type="text" id="node-name-input" class="config-input" value="${nodeData.name || ''}">
+                </div>
+                <div class="config-section">
+                    <h3>Server Type</h3>
+                    <select id="mcp-type-select" class="config-input">
+                        <option value="sse" ${nodeData.type === 'sse' ? 'selected' : ''}>Remote (SSE)</option>
+                        <option value="stdio" ${nodeData.type === 'stdio' ? 'selected' : ''}>Local (stdio)</option>
+                    </select>
+                </div>
+
+                <div id="mcp-sse-fields" class="config-section" style="display: ${nodeData.type === 'sse' ? 'block' : 'none'};">
+                    <h3>Server URL</h3>
+                    <input type="text" id="mcp-url-input" class="config-input" value="${nodeData.url || ''}" placeholder="http://localhost:8000/sse">
+                    <h3 style="margin-top: 1.5rem;">Auth Token (Optional)</h3>
+                    <input type="text" id="mcp-token-input" class="config-input" value="${nodeData.auth_token || ''}" placeholder="Bearer token if required">
+                </div>
+
+                <div id="mcp-stdio-fields" class="config-section" style="display: ${nodeData.type === 'stdio' ? 'block' : 'none'};">
+                    <h3>Script Path</h3>
+                    <input type="text" id="mcp-script-path-input" class="config-input" value="${nodeData.script_path || ''}" placeholder="e.g., examples/supervisor_multi_mcp/weather_server.py">
+                </div>
+                
+                <div class="config-actions">
+                     <button id="save-node-btn" class="action-btn save">Save Changes</button>
+                     <button id="delete-node-btn" class="action-btn delete">Delete Node</button>
+                </div>
+            </div>`;
+            configurationView.innerHTML = panelHtml;
+
+            // Add event listeners for MCP panel
+            const mcpTypeSelect = document.getElementById('mcp-type-select');
+            const sseFields = document.getElementById('mcp-sse-fields');
+            const stdioFields = document.getElementById('mcp-stdio-fields');
+
+            mcpTypeSelect.addEventListener('change', (e) => {
+                const isSSE = e.target.value === 'sse';
+                sseFields.style.display = isSSE ? 'block' : 'none';
+                stdioFields.style.display = isSSE ? 'none' : 'block';
+            });
+            
+            document.getElementById('save-node-btn').addEventListener('click', () => {
+                 const newName = document.getElementById('node-name-input').value;
+                 if (!newName.trim()) { alert("Node name cannot be empty."); return; }
+
+                 const updatedData = {
+                    uuid: nodeData.uuid,
+                    name: newName,
+                    type: document.getElementById('mcp-type-select').value,
+                    url: document.getElementById('mcp-url-input').value,
+                    auth_token: document.getElementById('mcp-token-input').value,
+                    script_path: document.getElementById('mcp-script-path-input').value,
+                };
+                editor.updateNodeDataFromId(id, updatedData);
+                // Note: Drawflow uses 'name' for the title bar, so we update both data and the node's top-level name
+                editor.drawflow.drawflow.Home.data[id].name = newName; 
+                editor.updateNodeValue(id, newName); // This function seems to be for the inner content, but we call it for safety
+                
+                alert('MCP node updated. Re-compile to apply changes.');
+            });
+
+            document.getElementById('delete-node-btn').addEventListener('click', () => {
+                if (confirm(`Delete node "${nodeData.name}"?`)) {
+                    editor.removeNodeId(`node-${id}`);
+                    resetConfigPanel();
+                }
+            });
+            return; // Stop execution to not show the default panel
+        }
+
+        // Build the configuration panel HTML dynamically for Agent/Supervisor
         let panelHtml = `
             <div class="config-content">
                 <div class="config-header">
@@ -151,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <h3>Enforce Output Schema (JSON)</h3>
                     <textarea id="output-schema-input" class="config-textarea" placeholder='e.g., {"type": "object", "properties": ...}'>${nodeData.output_schema || ''}</textarea>
                 </div>
-                <div class="config-section toggle-section" id="strict-mode-container" style="display: ${nodeData.output_schema ? 'flex' : 'none'};">
+                <div class="config-section toggle-section" id="strict-mode-container" style="display: ${nodeData.output_schema && nodeData.output_schema.trim() ? 'flex' : 'none'};">
                      <label for="strict-mode-toggle">Strict Mode</label>
                      <input type="checkbox" id="strict-mode-toggle" class="toggle-switch" ${nodeData.strict ? 'checked' : ''}>
                 </div>
@@ -187,9 +279,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // Collect all data from the form
             const updatedData = {
-                uuid: nodeData.uuid, // Preserve the UUID
+                uuid: nodeData.uuid,
                 name: newName,
                 system_message: document.getElementById('system-message-input').value,
             };
@@ -203,9 +294,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 updatedData.strict = document.getElementById('strict-mode-toggle').checked;
             }
             
-            // Update the node's name (label) and its internal data
             editor.updateNodeDataFromId(id, updatedData);
-            editor.updateNodeValue(id, newName); // Updates the title bar of the node
+            editor.drawflow.drawflow.Home.data[id].name = newName;
+            editor.updateNodeValue(id, newName);
             
             alert('Node data updated locally. Compile to apply changes.');
         });
@@ -222,14 +313,10 @@ document.addEventListener("DOMContentLoaded", () => {
     editor.on('nodeUnselected', resetConfigPanel);
 
     // =========================================================================
-    // WebSocket Chat, Initialization, etc. (Mostly Unchanged)
+    // WebSocket Chat, Initialization, etc.
     // =========================================================================
     let ws = null;
-    function connectWebSocket() { /* ... same as before ... */ }
-    function disconnectWebSocket() { /* ... same as before ... */ }
-    
-    // ... Paste the full WebSocket and form submission logic here from the previous version ...
-    // The WebSocket logic remains the same.
+
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
         ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -267,6 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startChatBtn.addEventListener('click', () => setMode('chat'));
     document.getElementById('add-supervisor-btn').addEventListener('click', () => addNode('supervisor', 'Supervisor'));
     document.getElementById('add-agent-btn').addEventListener('click', () => addNode('agent', 'Agent'));
+    document.getElementById('add-mcp-btn').addEventListener('click', () => addNode('mcp', 'MCP Server'));
     
     setMode('design');
     loadDefaultWorkflow();

@@ -22,7 +22,6 @@ class CompileRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Server is starting up.")
-    # No initial compilation. Will be triggered by frontend.
     yield
     logger.info("Server is shutting down.")
 
@@ -30,13 +29,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="XronAI Studio Server", version="0.1.0", lifespan=lifespan)
 
 
-# This endpoint is now for inspection only
 @app.get("/api/v1/nodes/{node_id}")
 async def get_node_details(node_id: str):
     node = state_manager.find_node_by_id(node_id)
     if not node:
         raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found in compiled workflow.")
-    # ... details logic ...
     return {"name": node.name, "system_message": node.system_message}
 
 
@@ -46,7 +43,7 @@ async def compile_workflow(request: CompileRequest):
     Receives a Drawflow graph from the frontend and builds a runnable workflow.
     """
     try:
-        state_manager.compile_workflow_from_json(request.model_dump())
+        await state_manager.compile_workflow_from_json(request.model_dump())
         return {"status": "ok", "message": "Workflow compiled successfully."}
     except Exception as e:
         logger.error(f"Workflow compilation failed: {e}", exc_info=True)
