@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Any, Dict
 
 from studio.server.state import StateManager
-from studio.server.graph_utils import build_graph_from_workflow, X_SPACING, GRAPH_MARGIN_Y
+from xronai.tools import TOOL_REGISTRY
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +27,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="XronAI Studio Server", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/api/v1/tools/schemas")
+async def get_available_tool_schemas():
+    """
+    Returns a mapping of available tool names to their configuration schemas.
+    The frontend uses this to dynamically build configuration forms.
+    """
+    schemas = {}
+    for name, tool_class in TOOL_REGISTRY.items():
+        if hasattr(tool_class, 'get_config_schema'):
+            schemas[name] = tool_class.get_config_schema()
+    return schemas
 
 
 @app.get("/api/v1/nodes/{node_id}")

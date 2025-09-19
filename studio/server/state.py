@@ -6,6 +6,7 @@ from typing import Optional, Union, Dict, Any, List
 from dotenv import load_dotenv
 
 from xronai.core import Supervisor, Agent
+from xronai.tools import TOOL_REGISTRY
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -56,7 +57,6 @@ class StateManager:
         if not drawflow_data:
             raise ValueError("Invalid or empty Drawflow export data.")
 
-        # 1. First pass: Instantiate all Agent/Supervisor nodes and validate names
         for df_id, node_info in drawflow_data.items():
             node_data = node_info.get("data", {})
             uuid = node_data.get("uuid")
@@ -75,22 +75,16 @@ class StateManager:
 
             node_type = node_info.get("class")
 
-            system_message = node_data.get("system_message", f"You are {name}.")
-
             if node_type == "agent":
-                schema_str = node_data.get("output_schema", "").strip()
-                output_schema = json.loads(schema_str) if schema_str else None
-
-                new_node = Agent(
-                    name=name,
-                    llm_config=self.llm_config,
-                    system_message=system_message,
-                    keep_history=node_data.get("keep_history", True),
-                    output_schema=output_schema,
-                    strict=node_data.get("strict", False),
-                    mcp_servers=[],
-                    use_tools=False  # --- FIX: Default to False, will be enabled if connected to tools
-                )
+                new_node = Agent(name=name,
+                                 llm_config=self.llm_config,
+                                 system_message=node_data.get("system_message", f"You are {name}."),
+                                 keep_history=node_data.get("keep_history", True),
+                                 output_schema=json.loads(node_data.get("output_schema", "null") or "null"),
+                                 strict=node_data.get("strict", False),
+                                 mcp_servers=[],
+                                 tools=[],
+                                 use_tools=False)
                 new_node.set_workflow_id(self.workflow_id)
                 nodes_by_uuid[uuid] = new_node
 
@@ -98,26 +92,21 @@ class StateManager:
                 new_node = Supervisor(name=name,
                                       llm_config=self.llm_config,
                                       is_assistant=True,
-                                      system_message=system_message,
+                                      system_message=node_data.get("system_message", f"You are {name}."),
                                       use_agents=node_data.get("use_agents", True))
                 new_node.set_workflow_id(self.workflow_id)
                 nodes_by_uuid[uuid] = new_node
 
-        # 2. Second pass: Find entry point and build hierarchy
         user_node_info = next((n for n in node_data_by_drawflow_id.values() if n.get("class") == "user"), None)
         if not user_node_info:
             raise ValueError("Workflow must have a User node.")
 
-        entry_point_uuid = None
         user_outputs = user_node_info.get("outputs", {}).get("output_1", {}).get("connections", [])
-        if user_outputs:
-            target_df_id = user_outputs[0]["node"]
-            target_node_info = node_data_by_drawflow_id.get(target_df_id)
-            if target_node_info:
-                entry_point_uuid = target_node_info.get("data", {}).get("uuid")
-
-        if not entry_point_uuid:
+        if not user_outputs:
             raise ValueError("User node must be connected to an Agent or Supervisor.")
+
+        entry_point_df_id = user_outputs[0]["node"]
+        entry_point_uuid = node_data_by_drawflow_id.get(entry_point_df_id, {}).get("data", {}).get("uuid")
 
         self.chat_entry_point = nodes_by_uuid.get(entry_point_uuid)
         if not self.chat_entry_point:
@@ -126,7 +115,6 @@ class StateManager:
         if isinstance(self.chat_entry_point, Supervisor):
             self.chat_entry_point.is_assistant = False
 
-        # 3. Third pass: Register agents to supervisors AND connect agents to MCP servers
         for df_id, node_info in node_data_by_drawflow_id.items():
             source_uuid = node_info.get("data", {}).get("uuid")
             source_node = nodes_by_uuid.get(source_uuid)
@@ -137,35 +125,46 @@ class StateManager:
             for conn in node_info.get("outputs", {}).get("output_1", {}).get("connections", []):
                 target_df_id = conn["node"]
                 target_node_info = node_data_by_drawflow_id.get(target_df_id, {})
+                target_class = target_node_info.get("class")
+                target_data = target_node_info.get("data", {})
 
                 if isinstance(source_node, Supervisor):
-                    target_uuid = target_node_info.get("data", {}).get("uuid")
-                    if target_uuid:
-                        target_node = nodes_by_uuid.get(target_uuid)
-                        if target_node:
-                            source_node.register_agent(target_node)
-                            logger.info(f"Registered '{target_node.name}' to '{source_node.name}'.")
+                    target_node = nodes_by_uuid.get(target_data.get("uuid"))
+                    if target_node:
+                        source_node.register_agent(target_node)
+                        logger.info(f"Registered '{target_node.name}' to '{source_node.name}'.")
 
-                elif isinstance(source_node, Agent) and target_node_info.get("class") == "mcp":
-                    mcp_data = target_node_info.get("data", {})
-                    mcp_config = {
-                        "type": mcp_data.get("type"),
-                        "url": mcp_data.get("url"),
-                        "auth_token": mcp_data.get("auth_token"),
-                        "script_path": mcp_data.get("script_path"),
-                    }
-                    mcp_config = {k: v for k, v in mcp_config.items() if v}
+                elif isinstance(source_node, Agent):
+                    if target_class == "mcp":
+                        mcp_config = {
+                            k: v
+                            for k, v in target_data.items()
+                            if k in ['type', 'url', 'auth_token', 'script_path'] and v
+                        }
+                        source_node.mcp_servers.append(mcp_config)
+                        source_node.use_tools = True
+                        logger.info(f"Connecting Agent '{source_node.name}' to MCP server '{target_data.get('name')}'.")
 
-                    source_node.mcp_servers.append(mcp_config)
-                    source_node.use_tools = True  # --- FIX: Enable tools for this agent ---
-                    logger.info(f"Connecting Agent '{source_node.name}' to MCP server '{mcp_data.get('name')}'.")
+                    elif target_class == "tool":
+                        tool_type = target_data.get("tool_type")
+                        tool_config = target_data.get("config", {})
 
-        # 4. Final pass: Load MCP tools for all agents that have them
+                        ToolClass = TOOL_REGISTRY.get(tool_type)
+                        if ToolClass:
+                            try:
+                                tool_instance = ToolClass(**tool_config)
+                                source_node.tools.append(tool_instance.as_agent_tool())
+                                source_node.use_tools = True
+                                logger.info(f"Attached configured tool '{tool_type}' to Agent '{source_node.name}'.")
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to instantiate tool '{tool_type}' for agent '{source_node.name}': {e}")
+                        else:
+                            logger.warning(f"Tool type '{tool_type}' selected in UI but not found in backend registry.")
+
         for node in nodes_by_uuid.values():
             if isinstance(node, Agent) and node.mcp_servers:
                 await node._load_mcp_tools()
-                logger.info(
-                    f"Loaded {len(node.tools)} tool(s) for Agent '{node.name}' from {len(node.mcp_servers)} MCP server(s)."
-                )
+                logger.info(f"Loaded MCP tools for Agent '{node.name}'.")
 
         logger.info(f"Workflow compiled successfully. Entry point: '{self.chat_entry_point.name}'.")

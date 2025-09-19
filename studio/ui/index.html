@@ -25,7 +25,7 @@
                     <button id="add-supervisor-btn" title="Add Supervisor">S</button>
                     <button id="add-agent-btn" title="Add Agent">A</button>
                     <button id="add-user-btn" title="Add User">U</button>
-                    <button id="add-tool-btn" title="Add Tool">T</button>
+                    <button id="add-tool-btn" title="Add Built-in Tool">T</button>
                     <button id="add-mcp-btn" title="Add MCP Server">M</button>
                 </aside>
                 <section class="canvas" id="drawflow"></section>
@@ -52,6 +52,16 @@
             </section>
         </main>
     </div>
+
+    <div id="add-tool-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Select a Tool</h2>
+            <div id="tool-list" class="tool-list-container">
+            </div>
+            <button id="close-tool-modal-btn" class="modal-close-btn">Cancel</button>
+        </div>
+    </div>
+
     <script src="/app.js"></script>
 </body>
 </html>
