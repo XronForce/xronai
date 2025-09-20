@@ -157,5 +157,5 @@ class ConfigValidator:
                 if field not in tool:
                     raise ConfigValidationError(f"Missing required field '{field}' in tool configuration")
 
-            if tool['type'] != 'function':
-                raise ConfigValidationError(f"Invalid tool type: {tool['type']}")
+            if tool['type'] not in ['function', 'class']:
+                raise ConfigValidationError(f"Invalid tool type: {tool['type']}. Must be 'function' or 'class'.")

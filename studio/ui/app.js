@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const studioContainer = document.querySelector(".studio-container");
     const editWorkflowBtn = document.getElementById("edit-workflow-btn");
     const startChatBtn = document.getElementById("start-chat-btn");
+    const exportWorkflowBtn = document.getElementById("export-workflow-btn");
     const log = document.getElementById("log");
     const form = document.getElementById("form");
     const input = document.getElementById("input");
@@ -364,10 +365,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     function disconnectWebSocket() { if (ws) { ws.close(); addLogEntry("event-SYSTEM", "Disconnected. Entering Design Mode."); } }
     form.addEventListener("submit", e => { e.preventDefault(); if (input.value && ws && ws.readyState === WebSocket.OPEN) { ws.send(input.value); input.value = ''; } });
     
+    // --- NEW EXPORT LOGIC ---
+    function downloadFile(filename, content, mimeType) {
+        const element = document.createElement('a');
+        const blob = new Blob([content], { type: mimeType });
+        element.href = URL.createObjectURL(blob);
+        element.download = filename;
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+    }
+
+    async function handleExport() {
+        exportWorkflowBtn.textContent = 'Exporting...';
+        exportWorkflowBtn.disabled = true;
+        try {
+            const workflowData = editor.export();
+            const response = await fetch('/api/v1/workflow/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ drawflow: workflowData, format: 'yaml' }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Unknown export error');
+            }
+            const data = await response.json();
+            downloadFile('workflow.yaml', data.content, 'application/x-yaml');
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert(`Could not export workflow.\n\nError: ${error.message}`);
+        } finally {
+            exportWorkflowBtn.textContent = 'Export as YAML';
+            exportWorkflowBtn.disabled = false;
+        }
+    }
+    // --- END NEW EXPORT LOGIC ---
+
     await fetchToolSchemas();
     
     editWorkflowBtn.addEventListener('click', () => setMode('design'));
     startChatBtn.addEventListener('click', () => setMode('chat'));
+    exportWorkflowBtn.addEventListener('click', handleExport); // Add event listener
     document.getElementById('add-supervisor-btn').addEventListener('click', () => addNode('supervisor', 'Supervisor'));
     document.getElementById('add-agent-btn').addEventListener('click', () => addNode('agent', 'Agent'));
     document.getElementById('add-user-btn').addEventListener('click', () => addNode('user', 'User'));

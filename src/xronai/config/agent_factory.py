@@ -114,7 +114,16 @@ class AgentFactory:
         """
         tools = []
         for tool_config in tools_config:
-            tool_function = AgentFactory._import_function(tool_config['python_path'])
+            imported_obj = AgentFactory._import_function(tool_config['python_path'])
+            tool_function = None
+
+            if isinstance(imported_obj, type):
+                tool_init_config = tool_config.get('config', {})
+                tool_instance = imported_obj(**tool_init_config)
+                tool_function = tool_instance.execute
+            else:
+                tool_function = imported_obj
+
             metadata = {
                 "type": "function",
                 "function": {
@@ -133,18 +142,18 @@ class AgentFactory:
     @staticmethod
     def _import_function(python_path: str):
         """
-        Import a function from a given Python path.
+        Import a function or class from a given Python path.
 
         Args:
-            python_path (str): The full path to the function, including module.
+            python_path (str): The full path to the object, including module.
 
         Returns:
-            Callable: The imported function.
+            Callable or type: The imported function or class.
 
         Raises:
-            ImportError: If the module or function cannot be imported.
-            AttributeError: If the specified function is not found in the module.
+            ImportError: If the module or object cannot be imported.
+            AttributeError: If the specified object is not found in the module.
         """
-        module_name, function_name = python_path.rsplit('.', 1)
+        module_name, object_name = python_path.rsplit('.', 1)
         module = importlib.import_module(module_name)
-        return getattr(module, function_name)
+        return getattr(module, object_name)

@@ -1,4 +1,5 @@
 import os, sys
+import asyncio
 from dotenv import load_dotenv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -10,17 +11,15 @@ load_dotenv()
 # Load and process the YAML configuration
 config = load_yaml_config('examples/memory_task_management/config.yaml')
 
-# Create the agent structure from YAML
-factory = AgentFactory()
-context_manager = factory.create_from_config(config)
 
+async def main():
+    # Create the agent structure from YAML
+    context_manager = await AgentFactory.create_from_config(config)
 
-def chat_with_agents(query: str):
-    response = context_manager.chat(query)
-    print(f"Context Manager: {response}")
+    async def chat_with_agents(query: str):
+        response = await asyncio.to_thread(context_manager.chat, query)
+        print(f"Context Manager: {response}")
 
-
-if __name__ == "__main__":
     print("Welcome to the Context-Aware Task Management System!")
     print("\nThis example demonstrates the difference between stateful and stateless agents:")
     print("- StatefulTaskManager: Remembers context from previous interactions")
@@ -34,7 +33,14 @@ if __name__ == "__main__":
     print("\nType 'exit' to quit.")
 
     while True:
-        user_input = input("\nYou: ")
+        user_input = await asyncio.to_thread(input, "\nYou: ")
         if user_input.lower() == 'exit':
             break
-        chat_with_agents(user_input)
+        await chat_with_agents(user_input)
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nSession ended.")

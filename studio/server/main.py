@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 from studio.server.state import StateManager
 from xronai.tools import TOOL_REGISTRY
+from studio.server.export_utils import generate_yaml_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +18,11 @@ state_manager = StateManager()
 
 class CompileRequest(BaseModel):
     drawflow: Dict[str, Any]
+
+
+class ExportRequest(BaseModel):
+    drawflow: Dict[str, Any]
+    format: str
 
 
 @asynccontextmanager
@@ -61,6 +67,22 @@ async def compile_workflow(request: CompileRequest):
     except Exception as e:
         logger.error(f"Workflow compilation failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Compilation Error: {str(e)}")
+
+
+@app.post("/api/v1/workflow/export")
+async def export_workflow(request: ExportRequest):
+    """
+    Receives a Drawflow graph and returns it in the specified format (e.g., YAML).
+    """
+    if request.format == "yaml":
+        try:
+            yaml_content = generate_yaml_config(request.drawflow)
+            return {"status": "ok", "format": "yaml", "content": yaml_content}
+        except Exception as e:
+            logger.error(f"YAML export failed: {e}", exc_info=True)
+            raise HTTPException(status_code=400, detail=f"Export Error: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail=f"Format '{request.format}' not supported.")
 
 
 @app.websocket("/ws")
