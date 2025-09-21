@@ -5,6 +5,7 @@ import webbrowser
 import asyncio
 from typing_extensions import Annotated
 from typing import Optional
+from pathlib import Path
 
 app = typer.Typer(name="xronai", help="The command-line interface for the XronAI SDK.", add_completion=False)
 
@@ -12,7 +13,7 @@ app = typer.Typer(name="xronai", help="The command-line interface for the XronAI
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
-        print("Welcome to XronAI CLI. Please specify a command, e.g., 'studio'.")
+        print("Welcome to XronAI CLI. Please specify a command, e.g., 'studio' or 'serve'.")
         print(ctx.get_help())
 
 
@@ -32,7 +33,7 @@ def studio(config: Annotated[Optional[str],
 
 async def start_studio_server(config, host, port, no_browser, reload):
     """
-    The core async function to configure and run the Uvicorn server.
+    The core async function to configure and run the Uvicorn server for the Studio.
     """
     if config:
         os.environ["XRONAI_CONFIG_PATH"] = config
@@ -58,6 +59,44 @@ async def start_studio_server(config, host, port, no_browser, reload):
         asyncio.create_task(open_browser_after_delay())
 
     await server.serve()
+
+
+@app.command()
+def serve(
+    workflow_file: Annotated[
+        Path,
+        typer.Argument(
+            exists=True, file_okay=True, dir_okay=False, readable=True, help="Path to the exported workflow.yaml file."
+        )],
+    host: Annotated[str, typer.Option(help="The host address to run the server on.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="The port number to run the server on.")] = 8001,
+    history_dir: Annotated[
+        Optional[Path],
+        typer.
+        Option(file_okay=False, dir_okay=True, writable=True, help="Directory to store conversation session histories."
+              )] = None,
+    ui: Annotated[bool, typer.Option("--ui", help="Serve a simple web-based chat UI.")] = False,
+):
+    """
+    Loads and serves a XronAI workflow for production or testing.
+    """
+    print(f"INFO:     Preparing to serve workflow: {workflow_file}")
+
+    os.environ["XRONAI_WORKFLOW_FILE"] = str(workflow_file.resolve())
+
+    if history_dir:
+        history_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["XRONAI_HISTORY_DIR"] = str(history_dir.resolve())
+    elif "XRONAI_HISTORY_DIR" in os.environ:
+        del os.environ["XRONAI_HISTORY_DIR"]
+
+    if ui:
+        print("INFO:     --ui flag detected. Chat UI will be enabled.")
+        os.environ["XRONAI_SERVE_UI"] = "true"
+    elif "XRONAI_SERVE_UI" in os.environ:
+        del os.environ["XRONAI_SERVE_UI"]
+
+    uvicorn.run("xronai.server.main:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

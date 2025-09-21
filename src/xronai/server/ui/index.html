@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XronAI Chat</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <h2>Chat Sessions</h2>
+                <button id="new-chat-btn" title="Start New Chat">+</button>
+            </header>
+            <div id="session-list" class="session-list">
+                <!-- Session history will be populated here -->
+            </div>
+        </aside>
+        <main class="chat-area">
+            <header class="chat-header">
+                <h3 id="session-title">Welcome to XronAI</h3>
+                <button id="delete-chat-btn" title="Delete Current Chat" style="display: none;">Delete</button>
+            </header>
+            <div id="log" class="log-container">
+                <div class="log-entry system">
+                    <p>Start a new conversation or select a previous one from the sidebar.</p>
+                </div>
+            </div>
+            <footer class="chat-footer">
+                <form id="form" class="chat-form">
+                    <input type="text" id="input" placeholder="Type your message..." autocomplete="off" disabled>
+                    <button type="submit" disabled>Send</button>
+                </form>
+            </footer>
+        </main>
+    </div>
+    <script src="/app.js"></script>
+</body>
+</html>

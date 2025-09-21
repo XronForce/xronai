@@ -43,6 +43,8 @@ studio = [
 [project.scripts]
 xronai = "studio.cli:app"
 
-# This section is CRUCIAL for the src layout
 [tool.setuptools.packages.find]
 where = ["src", "."]
+
+[tool.setuptools.package-data]
+xronai = ["server/ui/*"]

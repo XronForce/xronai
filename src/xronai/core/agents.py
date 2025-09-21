@@ -37,7 +37,8 @@ class Agent(AI):
                  keep_history: bool = True,
                  mcp_servers: Optional[List[Dict[str, Any]]] = None,
                  output_schema: Optional[Dict[str, Any]] = None,
-                 strict: bool = False):
+                 strict: bool = False,
+                 history_base_path: Optional[str] = None):
         """
         Initialize the Agent instance.
 
@@ -58,6 +59,7 @@ class Agent(AI):
                 All discovered tools are available as functions to the agent.
             output_schema (Optional[Dict[str, Any]]): Schema for agent's output format.
             strict (bool): If True, always enforce output schema.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Raises:
             ValueError: If the name is empty.
@@ -69,6 +71,7 @@ class Agent(AI):
 
         self.name = name
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.use_tools = use_tools
         self.tools = tools or []
         self.system_message = system_message
@@ -85,10 +88,8 @@ class Agent(AI):
         if system_message:
             self.set_system_message(system_message)
 
-        # --- NEW LOGIC: Make Agent self-sufficient for history ---
         if self.workflow_id and self.keep_history:
             self._initialize_workflow()
-        # --------------------------------------------------------
 
         try:
             asyncio.get_running_loop()
@@ -105,21 +106,20 @@ class Agent(AI):
 
         self.debugger.update_workflow_id(self.workflow_id)
 
-        workflow_path = Path("xronai_logs") / self.workflow_id
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
         workflow_path.mkdir(parents=True, exist_ok=True)
 
         history_file = workflow_path / "history.jsonl"
         if not history_file.exists():
             history_file.touch()
 
-        self.history_manager = HistoryManager(self.workflow_id)
+        self.history_manager = HistoryManager(self.workflow_id, base_path=self.history_base_path)
 
-        # Save system message and load previous history
         self._initialize_chat_history()
 
-        # Load chat history from disk
         self.chat_history = self.history_manager.load_chat_history(self.name)
-        if len(self.chat_history) > 1:  # More than just the system message
+        if len(self.chat_history) > 1:
             self.debugger.log(f"Previous history loaded for standalone agent {self.name}.")
 
     def _initialize_chat_history(self):
@@ -144,24 +144,25 @@ class Agent(AI):
             }
             on_event(payload)
 
-    def set_workflow_id(self, workflow_id: str) -> None:
+    def set_workflow_id(self, workflow_id: str, history_base_path: Optional[str] = None) -> None:
         """
         Set the workflow ID and initialize the history manager.
-        This method is called by the Supervisor when registering the agent.
+        This method is called by the Supervisor when registering the agent or
+        re-configuring the workflow for a new session.
 
         Args:
-            workflow_id (str): The workflow ID to set.
+            workflow_id (str): The workflow ID (session ID) to set.
+            history_base_path (Optional[str]): The root directory for storing history logs.
         """
-        # --- MODIFIED LOGIC: Prevent re-initialization ---
-        if self.workflow_id:
-            # If the agent already initialized its own workflow, just update the debugger
-            self.debugger.update_workflow_id(workflow_id)
-            return
-        # -------------------------------------------------
-
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.debugger.update_workflow_id(workflow_id)
-        self.history_manager = HistoryManager(workflow_id)
+
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
+        workflow_path.mkdir(parents=True, exist_ok=True)
+
+        self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
         self._initialize_chat_history()
 
     def set_system_message(self, message: str) -> None:

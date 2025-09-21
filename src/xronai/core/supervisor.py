@@ -34,7 +34,8 @@ class Supervisor(AI):
                  workflow_id: Optional[str] = None,
                  is_assistant: bool = False,
                  system_message: Optional[str] = None,
-                 use_agents: bool = True):
+                 use_agents: bool = True,
+                 history_base_path: Optional[str] = None):
         """
         Initialize the Supervisor instance.
 
@@ -45,6 +46,7 @@ class Supervisor(AI):
             is_assistant (bool): Whether this is an assistant supervisor.
             system_message (Optional[str]): The initial system message for the agent.
             use_agents (bool): Whether to use agents or not.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Raises:
             ValueError: If the name is empty or if workflow management rules are violated.
@@ -57,6 +59,7 @@ class Supervisor(AI):
         self.name = name
         self.is_assistant = is_assistant
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
 
         self._pending_registrations: List[Union[Agent, 'Supervisor']] = []
         self.system_message = system_message if system_message is not None else self._get_default_system_message()
@@ -64,15 +67,15 @@ class Supervisor(AI):
         if not is_assistant:
             if workflow_id:
                 try:
-                    self.history_manager = HistoryManager(workflow_id)
-                except:
+                    self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
+                except ValueError:
                     self._initialize_workflow()
-                    self.history_manager = HistoryManager(workflow_id)
+                    self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
                 if not self.history_manager.has_system_message(self.name):
                     self._initialize_chat_history()
             else:
                 self._initialize_workflow()
-                self.history_manager = HistoryManager(self.workflow_id)
+                self.history_manager = HistoryManager(self.workflow_id, base_path=self.history_base_path)
                 self._initialize_chat_history()
         else:
             self.history_manager = None
@@ -151,27 +154,28 @@ class Supervisor(AI):
             self._pending_registrations.append(agent)
             return
 
-        if isinstance(agent, Supervisor):
-            agent.set_workflow_id(self.workflow_id)
-        else:
-            agent.set_workflow_id(self.workflow_id)
-
+        agent.set_workflow_id(self.workflow_id, history_base_path=self.history_base_path)
         self.registered_agents.append(agent)
         self._add_agent_tool(agent)
-        # self.system_message += f"{agent.name}: {agent.system_message}\n"
 
-    def set_workflow_id(self, workflow_id: str) -> None:
+    def set_workflow_id(self, workflow_id: str, history_base_path: Optional[str] = None) -> None:
         """
-        Set the workflow ID for this supervisor.
+        Set the workflow ID and history base path for this supervisor and all its children.
+        This is the key method for ensuring session state is correctly propagated.
         
         Args:
-            workflow_id (str): The workflow ID to set.
+            workflow_id (str): The workflow ID (session ID) to set.
+            history_base_path (Optional[str]): The root directory for storing history logs.
         """
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.debugger.update_workflow_id(workflow_id)
-        self.history_manager = HistoryManager(workflow_id)
+        self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
         self._initialize_chat_history()
         self._process_pending_registrations()
+
+        for agent in self.registered_agents:
+            agent.set_workflow_id(workflow_id, history_base_path=history_base_path)
 
     def _process_pending_registrations(self) -> None:
         """Process any pending agent registrations."""
@@ -233,7 +237,8 @@ class Supervisor(AI):
         if not self.workflow_id:
             self.workflow_id = str(uuid.uuid4())
 
-        workflow_path = Path("xronai_logs") / self.workflow_id
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
         workflow_path.mkdir(parents=True, exist_ok=True)
 
         history_file = workflow_path / "history.jsonl"

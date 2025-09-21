@@ -23,13 +23,14 @@ class AgentFactory:
     """
 
     @staticmethod
-    async def create_from_config(config: Dict[str, Any]) -> Supervisor:
+    async def create_from_config(config: Dict[str, Any], history_base_path: Optional[str] = None) -> Supervisor:
         """
         Create a Supervisor with its entire hierarchy from a configuration dictionary.
 
         Args:
             config (Dict[str, Any]): The configuration dictionary containing
                 the entire hierarchy structure.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
             Supervisor: The root Supervisor of the created hierarchy.
@@ -38,14 +39,18 @@ class AgentFactory:
             ConfigValidationError: If the configuration is invalid.
         """
         ConfigValidator.validate(config)
-        # Generate workflow_id if not provided
         workflow_id = config.get('workflow_id', str(uuid.uuid4()))
-        return await AgentFactory._create_supervisor(config['supervisor'], is_root=True, workflow_id=workflow_id)
+
+        return await AgentFactory._create_supervisor(config['supervisor'],
+                                                     is_root=True,
+                                                     workflow_id=workflow_id,
+                                                     history_base_path=history_base_path)
 
     @staticmethod
     async def _create_supervisor(supervisor_config: Dict[str, Any],
                                  is_root: bool = False,
-                                 workflow_id: Optional[str] = None) -> Supervisor:
+                                 workflow_id: Optional[str] = None,
+                                 history_base_path: Optional[str] = None) -> Supervisor:
         """
         Create a Supervisor instance and its children from a configuration dictionary.
 
@@ -53,6 +58,7 @@ class AgentFactory:
             supervisor_config (Dict[str, Any]): The configuration for this Supervisor.
             is_root (bool): Whether this Supervisor is the root of the hierarchy.
             workflow_id (Optional[str]): ID of the workflow (only for root supervisor).
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
             Supervisor: The created Supervisor instance with all its children.
@@ -61,24 +67,29 @@ class AgentFactory:
                                 llm_config=supervisor_config['llm_config'],
                                 system_message=supervisor_config['system_message'],
                                 workflow_id=workflow_id if is_root else None,
-                                is_assistant=supervisor_config.get('is_assistant', False))
+                                is_assistant=supervisor_config.get('is_assistant', False),
+                                history_base_path=history_base_path)
 
         for child_config in supervisor_config.get('children', []):
             if child_config['type'] == 'supervisor':
-                child = await AgentFactory._create_supervisor(child_config, is_root=False, workflow_id=None)
-            else:  # agent
-                child = await AgentFactory._create_agent(child_config)
+                child = await AgentFactory._create_supervisor(child_config,
+                                                              is_root=False,
+                                                              workflow_id=None,
+                                                              history_base_path=history_base_path)
+            else:
+                child = await AgentFactory._create_agent(child_config, history_base_path=history_base_path)
             supervisor.register_agent(child)
 
         return supervisor
 
     @staticmethod
-    async def _create_agent(agent_config: Dict[str, Any]) -> Agent:
+    async def _create_agent(agent_config: Dict[str, Any], history_base_path: Optional[str] = None) -> Agent:
         """
         Create an Agent instance from a configuration dictionary.
 
         Args:
             agent_config (Dict[str, Any]): The configuration for this Agent.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
             Agent: The created Agent instance with its tools.
@@ -90,11 +101,13 @@ class AgentFactory:
             'llm_config': agent_config['llm_config'],
             'system_message': agent_config['system_message'],
             'tools': tools,
-            'use_tools': agent_config.get('use_tools', bool(tools)),
+            'use_tools': agent_config.get('use_tools',
+                                          bool(tools) or bool(agent_config.get('mcp_servers'))),
             'keep_history': agent_config.get('keep_history', True),
             'output_schema': agent_config.get('output_schema'),
             'strict': agent_config.get('strict', False),
-            'mcp_servers': agent_config.get('mcp_servers', [])
+            'mcp_servers': agent_config.get('mcp_servers', []),
+            'history_base_path': history_base_path
         }
 
         agent = Agent(**agent_params)
