@@ -1,6 +1,44 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    let availableToolSchemas = {};
+    // --- SVG Icon Definitions ---
+    const ICONS = {
+        USER: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" /></svg>`,
+        AGENT: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M11.484 2.17a.75.75 0 011.032 0 11.209 11.209 0 014.328 4.673c.244.592.232 1.28.034 1.847.226.34.428.712.593 1.103.197.47.221.99.069 1.472.196.48.318 1 .353 1.531.038.562-.016 1.122-.153 1.655a.75.75 0 01-1.485-.221c.119-.46.163-.93.132-1.395-.034-.523-.153-1.015-.35-1.467a3.001 3.001 0 00-1.84-1.84c-.452-.2-.944-.316-1.468-.35a2.25 2.25 0 01-1.395.132.75.75 0 01-.22-1.485c.533-.137 1.093-.192 1.655-.153.53.036 1.05.158 1.53.354.48.196 1.052.22 1.472.068.583-.21 1.19-.222 1.847.034a11.209 11.209 0 014.673 4.328.75.75 0 010 1.032 11.209 11.209 0 01-4.673 4.328c-.592.244-1.28.232-1.847.034-.34-.226-.712-.428-1.103-.593-.47-.197-.99-.221-1.472-.069-.48-.196-1-.318-1.531-.353-.562-.038-1.122.016-1.655.153a.75.75 0 01-.221 1.485c.46-.119.93-.163 1.395-.132.523.034 1.015.153 1.467.35a3.001 3.001 0 001.84 1.84c.199.453.316.944.35 1.468.032.465-.013.935-.132 1.395a.75.75 0 01-1.485.22c.137-.533.191-1.093.153-1.655-.036-.53-.158-1.05-.354-1.53a3.001 3.001 0 00-.068-1.472c-.21-.583-.222-1.19-.034-1.847a11.209 11.209 0 01-4.328-4.673.75.75 0 010-1.032A11.209 11.209 0 0111.484 2.17z" clip-rule="evenodd" /></svg>`,
+        DELEGATE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.75 9.75a.75.75 0 01.75.75v5.42l1.63-1.916a.75.75 0 111.14 1.01l-3.25 3.81a.75.75 0 01-1.139-.001l-3.25-3.81a.75.75 0 111.14-1.01L15 15.92V10.5a.75.75 0 01.75-.75z" /><path fill-rule="evenodd" d="M5 4.5a.75.75 0 01.75.75v10.5a.75.75 0 01-1.5 0V5.25A.75.75 0 015 4.5zm4.5.75A.75.75 0 008.75 6v10.5a.75.75 0 001.5 0V6a.75.75 0 00-.75-.75z" clip-rule="evenodd" /></svg>`,
+        TOOL_CALL: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 6.75a5.25 5.25 0 015.25 5.25c0 1.254-.438 2.404-1.192 3.352l-.16.213-.11.148-1.924 2.565a.75.75 0 11-1.12-1.002l1.924-2.565.11-.148.16-.213a3.75 3.75 0 00.862-2.352 3.75 3.75 0 00-7.5 0c0 .92.336 1.763.863 2.352l.16.213.11.148 1.923 2.565a.75.75 0 01-1.12 1.002L7.33 15.352l.11-.148.16-.213A5.25 5.25 0 0112 6.75zM11.25 21a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V21z" clip-rule="evenodd" /><path d="M4.125 10.125a.75.75 0 01.75-.75H6a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H4.875a.75.75 0 01-.75-.75V10.125zM17.25 10.125a.75.75 0 01.75-.75h1.125a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H18a.75.75 0 01-.75-.75V10.125zM12 2.25a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V3a.75.75 0 01.75-.75z" /></svg>`,
+        TOOL_RESPONSE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M11.666 4.038a.75.75 0 01.668 0l7.5 4.5a.75.75 0 010 1.324l-7.5 4.5a.75.75 0 01-.668 0l-7.5-4.5a.75.75 0 010-1.324l7.5-4.5zM12 16.121l7.5-4.5-7.5-4.5-7.5 4.5 7.5 4.5z" clip-rule="evenodd" /><path d="M3.693 12.617a.75.75 0 01.668 0l7.5 4.5a.75.75 0 010 1.324l-7.5 4.5a.75.75 0 01-1.02-.662V13.28a.75.75 0 01.352-.662z" /><path d="M20.307 12.617a.75.75 0 00-.668 0l-7.5 4.5a.75.75 0 000 1.324l7.5 4.5a.75.75 0 001.02-.662V13.28a.75.75 0 00-.352-.662z" /></svg>`,
+        FINAL_RESPONSE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12.97 3.97a.75.75 0 011.06 0l7.5 7.5a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 11-1.06-1.06l6.22-6.22H3a.75.75 0 010-1.5h16.19l-6.22-6.22a.75.75 0 010-1.06z" clip-rule="evenodd" /></svg>`,
+        ERROR: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" /></svg>`
+    };
 
+    // --- THEME MANAGEMENT ---
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    const sunIcon = document.getElementById('theme-icon-sun');
+    const moonIcon = document.getElementById('theme-icon-moon');
+
+    const applyTheme = (theme) => {
+        if (theme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            sunIcon.style.display = 'none';
+            moonIcon.style.display = 'block';
+        } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            sunIcon.style.display = 'block';
+            moonIcon.style.display = 'none';
+        }
+    };
+
+    themeToggleBtn.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('xronai-theme', newTheme);
+        applyTheme(newTheme);
+    });
+
+    const savedTheme = localStorage.getItem('xronai-theme') || 'dark';
+    applyTheme(savedTheme);
+
+    // --- EXISTING VARIABLES ---
+    let availableToolSchemas = {};
     const studioContainer = document.querySelector(".studio-container");
     const editWorkflowBtn = document.getElementById("edit-workflow-btn");
     const startChatBtn = document.getElementById("start-chat-btn");
@@ -10,9 +48,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const input = document.getElementById("input");
     const configurationView = document.querySelector('.configuration-view');
     const originalPlaceholder = configurationView.innerHTML;
-    
     const canvasElement = document.getElementById('drawflow');
     const editor = new Drawflow(canvasElement);
+
+    // --- Loading Overlay Elements ---
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingMessage = document.getElementById('loading-message');
+
     editor.reroute = true;
     editor.reroute_fix_curvature = true;
     editor.force_first_input = false;
@@ -25,10 +67,50 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 
-    function addLogEntry(className, content) {
+    function showLoadingOverlay(message) {
+        loadingMessage.textContent = message;
+        loadingOverlay.style.display = 'flex';
+    }
+
+    function hideLoadingOverlay() {
+        loadingOverlay.style.display = 'none';
+    }
+
+    function addMessage(type, title, content, source, isCollapsible = false) {
         const entry = document.createElement("div");
-        entry.className = `log-entry ${className}`;
-        entry.innerHTML = content;
+        entry.className = `log-entry event-${type}`;
+
+        const sourceName = source ? `<span class="source-name">${source.name}</span>` : '';
+        const iconSvg = ICONS[type] || ICONS.AGENT;
+
+        let formattedContent = marked.parse(content || '');
+
+        let entryHTML;
+        if (isCollapsible) {
+            entryHTML = `
+                <details>
+                    <summary>
+                        <div class="log-header">
+                            <span class="log-icon">${iconSvg}</span>
+                            <strong class="log-title">${title}</strong>
+                            ${sourceName}
+                        </div>
+                    </summary>
+                    <div class="log-content collapsible-content">${formattedContent}</div>
+                </details>
+            `;
+        } else {
+            entryHTML = `
+                <div class="log-header">
+                    <span class="log-icon">${iconSvg}</span>
+                    <strong class="log-title">${title}</strong>
+                    ${sourceName}
+                </div>
+                <div class="log-content">${formattedContent}</div>
+            `;
+        }
+
+        entry.innerHTML = entryHTML;
         log.appendChild(entry);
         log.scrollTop = log.scrollHeight;
     }
@@ -41,7 +123,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             populateToolModal();
         } catch (error) {
             console.error("Error fetching tool schemas:", error);
-            addLogEntry("event-ERROR", "Could not load available built-in tools from the server.");
         }
     }
 
@@ -71,9 +152,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function compileAndStartChat() {
-        addLogEntry("event-SYSTEM", "Compiling workflow...");
+        showLoadingOverlay("Compiling workflow...");
         const workflowData = editor.export();
-        console.log("Exported workflow for compilation:", workflowData);
 
         try {
             const response = await fetch('/api/v1/workflow/compile', {
@@ -86,8 +166,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const error = await response.json();
                 throw new Error(error.detail || "Unknown compilation error.");
             }
-
-            addLogEntry("event-SYSTEM", "Compilation successful. Starting chat mode.");
+            
+            log.innerHTML = '';
             studioContainer.classList.add('chat-mode');
             startChatBtn.classList.add('active');
             editWorkflowBtn.classList.remove('active');
@@ -96,8 +176,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         } catch (error) {
             console.error("Compilation failed:", error);
-            addLogEntry("event-ERROR", `<b>Compilation Failed:</b> ${error.message}`);
             alert(`Could not start chat. Please fix the workflow.\n\nError: ${error.message}`);
+        } finally {
+            hideLoadingOverlay();
         }
     }
 
@@ -336,7 +417,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (confirm(`Delete node "${nodeData.name}"?`)) { editor.removeNodeId(`node-${id}`); resetConfigPanel(); }
         });
     });
-
+    
     function resetConfigPanel() { configurationView.innerHTML = originalPlaceholder; }
     editor.on('nodeUnselected', resetConfigPanel);
 
@@ -344,28 +425,92 @@ document.addEventListener("DOMContentLoaded", async () => {
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
         ws = new WebSocket(`ws://${window.location.host}/ws`);
-        ws.onopen = () => addLogEntry("event-SYSTEM", "Connection established. Ready to chat.");
-        ws.onclose = (event) => { if (studioContainer.classList.contains('chat-mode')) { addLogEntry("event-ERROR", `Connection closed unexpectedly. Reason: ${event.reason || "Unknown"}`); } ws = null; };
-        ws.onerror = () => addLogEntry("event-ERROR", `WebSocket Error: Could not connect.`);
+        ws.onopen = () => {};
+        ws.onclose = (event) => { if (studioContainer.classList.contains('chat-mode')) { console.log(`Connection closed: ${event.reason || "Unknown"}`); } ws = null; };
+        ws.onerror = () => addMessage("ERROR", "Connection Error", "Could not connect to the workflow server.", null);
         ws.onmessage = (event) => {
+            document.getElementById('thinking-indicator')?.remove();
+            input.classList.remove('processing');
+
             const data = JSON.parse(event.data);
-            let content = '';
+            
+            if (data.type === 'WORKFLOW_END') return;
+
+            let content;
             switch (data.type) {
-                case "WORKFLOW_START": content = `<strong>USER QUERY</strong><p>${data.data.user_query}</p>`; addLogEntry("event-USER", content); break;
-                case "SUPERVISOR_DELEGATE": content = `<strong>DELEGATING</strong> [${data.data.source.name} → ${data.data.target.name}]<p><strong>Reasoning:</strong> ${data.data.reasoning}</p><p><strong>Query:</strong> ${data.data.query_for_agent}</p>`; addLogEntry("event-SUPERVISOR_DELEGATE", content); break;
-                case "AGENT_TOOL_CALL": content = `<strong>TOOL CALL</strong> [${data.data.source.name}]<p><strong>Tool:</strong> ${data.data.tool_name}</p><p><strong>Arguments:</strong><pre>${JSON.stringify(data.data.arguments, null, 2)}</pre></p>`; addLogEntry("event-AGENT_TOOL_CALL", content); break;
-                case "AGENT_TOOL_RESPONSE": content = `<strong>TOOL RESPONSE</strong> [${data.data.source.name}]<p><strong>Result:</strong><pre>${JSON.stringify(data.data.result, null, 2)}</pre></p>`; addLogEntry("event-AGENT_TOOL_RESPONSE", content); break;
-                case "AGENT_RESPONSE": content = `<strong>AGENT RESPONSE</strong> [${data.data.source.name}]<p>${data.data.content}</p>`; addLogEntry("event-AGENT_RESPONSE", content); break;
-                case "FINAL_RESPONSE": content = `<strong>FINAL RESPONSE</strong> [${data.data.source.name}]<p>${data.data.content}</p>`; addLogEntry("event-FINAL_RESPONSE", content); break;
-                case "ERROR": content = `<strong>ERROR</strong> [${data.data.source.name}]<p>${data.data.error_message}</p>`; addLogEntry("event-ERROR", content); break;
-                default: content = `<strong>${data.type}</strong><pre>${JSON.stringify(data.data, null, 2)}</pre>`; addLogEntry("event-SYSTEM", content);
+                case "WORKFLOW_START":
+                    const userQuery = data.data.user_query.replace(/\n/g, '<br>');
+                    addMessage("USER", "You", userQuery, null);
+                    break;
+                case "SUPERVISOR_DELEGATE":
+                    content = `**Reasoning:** ${data.data.reasoning}\n\n**Query for Agent:** ${data.data.query_for_agent}`;
+                    addMessage("DELEGATE", `Delegate to ${data.data.target.name}`, content, data.data.source, true);
+                    break;
+                case "AGENT_TOOL_CALL":
+                    content = `**Tool:** \`${data.data.tool_name}\`\n\n**Arguments:**\n\`\`\`json\n${JSON.stringify(data.data.arguments, null, 2)}\n\`\`\``;
+                    addMessage("TOOL_CALL", "Tool Call", content, data.data.source, true);
+                    break;
+                case "AGENT_TOOL_RESPONSE":
+                    content = `\`\`\`json\n${JSON.stringify(data.data.result, null, 2)}\n\`\`\``;
+                    addMessage("TOOL_RESPONSE", "Tool Response", content, data.data.source, true);
+                    break;
+                case "AGENT_RESPONSE":
+                    addMessage("AGENT_RESPONSE", "Agent Response", data.data.content, data.data.source);
+                    break;
+                case "FINAL_RESPONSE":
+                    addMessage("FINAL_RESPONSE", "Final Response", data.data.content, data.data.source);
+                    break;
+                case "ERROR":
+                    addMessage("ERROR", "Error", data.data.error_message, data.data.source);
+                    break;
+                default:
+                    content = `\`\`\`json\n${JSON.stringify(data.data, null, 2)}\n\`\`\``;
+                    addMessage("SYSTEM", data.type, content, { name: "System" }, true);
             }
         };
     }
-    function disconnectWebSocket() { if (ws) { ws.close(); addLogEntry("event-SYSTEM", "Disconnected. Entering Design Mode."); } }
-    form.addEventListener("submit", e => { e.preventDefault(); if (input.value && ws && ws.readyState === WebSocket.OPEN) { ws.send(input.value); input.value = ''; } });
+
+    function disconnectWebSocket() { if (ws) { ws.close(); } }
     
-    // --- NEW EXPORT LOGIC ---
+    form.addEventListener("submit", e => {
+        e.preventDefault();
+        const message = input.value.trim();
+        if (message && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(message);
+            input.value = '';
+            input.style.height = 'auto';
+            input.classList.add('processing');
+            
+            const thinkingEntry = document.createElement("div");
+            thinkingEntry.id = "thinking-indicator";
+            thinkingEntry.className = "log-entry event-thinking";
+            thinkingEntry.innerHTML = `
+                <div class="log-header">
+                    <span class="log-icon">${ICONS.AGENT}</span>
+                </div>
+                <div class="log-content">
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            log.appendChild(thinkingEntry);
+            log.scrollTop = log.scrollHeight;
+        }
+    });
+
+    input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = `${input.scrollHeight}px`;
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+    });
+    
     function downloadFile(filename, content, mimeType) {
         const element = document.createElement('a');
         const blob = new Blob([content], { type: mimeType });
@@ -400,13 +545,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             exportWorkflowBtn.disabled = false;
         }
     }
-    // --- END NEW EXPORT LOGIC ---
 
     await fetchToolSchemas();
     
     editWorkflowBtn.addEventListener('click', () => setMode('design'));
     startChatBtn.addEventListener('click', () => setMode('chat'));
-    exportWorkflowBtn.addEventListener('click', handleExport); // Add event listener
+    exportWorkflowBtn.addEventListener('click', handleExport);
     document.getElementById('add-supervisor-btn').addEventListener('click', () => addNode('supervisor', 'Supervisor'));
     document.getElementById('add-agent-btn').addEventListener('click', () => addNode('agent', 'Agent'));
     document.getElementById('add-user-btn').addEventListener('click', () => addNode('user', 'User'));
@@ -416,5 +560,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     setMode('design');
     loadDefaultWorkflow();
-    addLogEntry("event-SYSTEM", "Welcome to XronAI Studio.");
+
+    // --- NEW: PANEL RESIZING LOGIC ---
+    const resizer = document.querySelector('.resizer');
+    const contextualPanel = document.querySelector('.contextual-panel');
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        // Prevent text selection while dragging
+        document.body.style.userSelect = 'none';
+        document.body.style.pointerEvents = 'none'; // Improves performance
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', stopResizing);
+    });
+
+    function handleMouseMove(e) {
+        if (!isResizing) return;
+        // Calculate the new width from the right edge of the screen
+        const newWidth = window.innerWidth - e.clientX;
+        // Apply boundaries to prevent panel from becoming too small or large
+        if (newWidth > 400 && newWidth < window.innerWidth - 400) {
+            contextualPanel.style.width = `${newWidth}px`;
+        }
+    }
+
+    function stopResizing() {
+        isResizing = false;
+        // Re-enable text selection and pointer events
+        document.body.style.userSelect = '';
+        document.body.style.pointerEvents = '';
+        
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', stopResizing);
+    }
 });
