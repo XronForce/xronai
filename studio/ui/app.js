@@ -85,6 +85,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadingOverlay.style.display = 'none';
     }
 
+    function populateToolbarIcons() {
+        document.getElementById('add-user-btn').innerHTML = NODE_ICONS.USER;
+        document.getElementById('add-supervisor-btn').innerHTML = NODE_ICONS.SUPERVISOR;
+        document.getElementById('add-agent-btn').innerHTML = NODE_ICONS.AGENT;
+        document.getElementById('add-tool-btn').innerHTML = NODE_ICONS.TOOL;
+        document.getElementById('add-mcp-btn').innerHTML = NODE_ICONS.MCP;
+    }
+
     function addMessage(type, title, content, source, isCollapsible = false) {
         const entry = document.createElement("div");
         entry.className = `log-entry event-${type}`;
@@ -619,6 +627,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setMode('design');
     loadDefaultWorkflow();
     updateAddUserButtonState();
+    populateToolbarIcons();
 
     const resizer = document.querySelector('.resizer');
     const contextualPanel = document.querySelector('.contextual-panel');
