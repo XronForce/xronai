@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Sansation&display=swap');
+
 :root {
     /* Color scheme for Dark Theme (default) */
     --background-dark: #121212;
@@ -321,3 +323,23 @@ summary .log-header { margin-bottom: 0; }
 .tool-list-container button { padding: 0.75rem 1rem; background-color: var(--background-light); border: 1px solid var(--border-color); color: var(--font-primary); border-radius: 6px; text-align: left; cursor: pointer; transition: background-color 0.2s; }
 .tool-list-container button:hover { background-color: #2a2a2a; }
 .modal-close-btn { background: none; border: 1px solid var(--font-secondary); color: var(--font-secondary); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+
+/* --- HEADER LOGO STYLES --- */
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.header-logo {
+    height: 40px;
+    width: auto;
+}
+
+.logo-container h1 {
+    font-family: 'Sansation', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin: 0;
+    color: var(--font-secondary);
+}

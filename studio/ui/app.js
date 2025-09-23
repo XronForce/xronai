@@ -246,7 +246,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             </div>
         `;
         
-        const nodeId = editor.addNode(baseName, inputs, outputs, 300, 150, nodeClass, nodeData, nodeHtml);
+        const nodeId = editor.addNode(baseName, inputs, outputs, 100, 250, nodeClass, nodeData, nodeHtml);
         return nodeId;
     }
     
