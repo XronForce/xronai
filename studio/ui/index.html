@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.css">
     <script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <title>XronAI Studio</title>
+    <title>Xron AI Studio</title>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -19,7 +20,7 @@
     <div class="studio-container">
         <header class="studio-header">
             <div class="logo-container">
-                <img src="/assets/studio-logo.png" alt="XronAI Logo" class="header-logo">
+                <div class="header-logo" role="img" aria-label="XronAI Logo"></div>
                 <h1>Studio</h1>
             </div>
             <div class="header-actions">
@@ -44,7 +45,23 @@
                     <button id="add-tool-btn" title="Add Built-in Tool"></button>
                     <button id="add-mcp-btn" title="Add MCP Server"></button>
                 </aside>
-                <section class="canvas" id="drawflow"></section>
+                <section class="canvas" id="drawflow">
+                    <div class="canvas-controls">
+                        <button id="zoom-in-btn" title="Zoom In">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button id="zoom-out-btn" title="Zoom Out">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M3.75 12a.75.75 0 0 1 .75-.75h15a.75.75 0 0 1 0 1.5h-15a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button id="center-view-btn" title="Center View">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M12 3H6a3 3 0 0 0-3 3v6a1 1 0 0 0 2 0V6a1 1 0 0 1 1-1h6a1 1 0 0 0 0-2zM26 3h-6a1 1 0 0 0 0 2h6a1 1 0 0 1 1 1v6a1 1 0 0 0 2 0V6a3 3 0 0 0-3-3zM28 19a1 1 0 0 0-1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 0 0 2h6a3 3 0 0 0 3-3v-6a1 1 0 0 0-1-1zM12 27H6a1 1 0 0 1-1-1v-6a1 1 0 0 0-2 0v6a3 3 0 0 0 3 3h6a1 1 0 0 0 0-2z"/></svg>
+                        </button>
+                        <button id="lock-canvas-btn" title="Lock Canvas">
+                            <svg class="lock-icon-unlocked" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 0 1-1.5 0V6.75a3.75 3.75 0 1 0-7.5 0v3a3 3 0 0 1 3 3v6.75a3 3 0 0 1-3 3H3.75a3 3 0 0 1-3-3v-6.75a3 3 0 0 1 3-3h9V6.75a5.25 5.25 0 0 1 5.25-5.25Z" /></svg>
+                            <svg class="lock-icon-locked" style="display: none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </section>
             </div>
 
             <div class="resizer" data-direction="vertical"></div>

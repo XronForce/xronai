@@ -12,6 +12,7 @@
     --accent-hover: #dddddd;
     --accent-text: #121212;
     --scroll-thumb: #555;
+    --port-hover-color: #e0e0e0;
     
     /* Static colors for input box */
     --input-bg: #ffffff;
@@ -43,6 +44,7 @@ html[data-theme="light"] {
     --accent-hover: #333333;
     --accent-text: #ffffff;
     --scroll-thumb: #bbb;
+    --port-hover-color: #000000;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -77,6 +79,64 @@ body, html {
 .icon-toolbar button:hover { border-color: var(--accent-color); color: var(--accent-color); }
 .icon-toolbar button svg { width: 24px; height: 24px; color: inherit; }
 .canvas { flex-grow: 1; background-color: var(--background-light); background-image: radial-gradient(var(--border-color) 1px, transparent 1px); background-size: 20px 20px; position: relative; }
+
+/* --- CANVAS CONTROLS --- */
+.canvas-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10;
+    background-color: var(--background-light);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+}
+
+.canvas-controls button {
+    width: 40px;
+    height: 40px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    color: var(--font-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.canvas-controls button:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.canvas-controls button:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.canvas-controls button:last-child {
+    border-bottom: none;
+}
+
+.canvas-controls button:hover {
+    background-color: var(--surface-color);
+    color: var(--font-primary);
+}
+
+.canvas-controls button.locked {
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+}
+
+.canvas-controls button svg {
+    width: 20px;
+    height: 20px;
+}
+
 .contextual-panel { width: 40%; min-width: 400px; height: 100%; background-color: var(--background-dark); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 1; }
 .panel-placeholder { padding: 2rem; color: var(--font-secondary); text-align: center; }
 .configuration-view { display: flex; align-items: center; justify-content: center; height: 100%; }
@@ -252,8 +312,7 @@ summary .log-header { margin-bottom: 0; }
     transition: all 0.2s;
 }
 .drawflow-node .input:hover, .drawflow-node .output:hover {
-    transform: translateY(-50%) scale(1.2);
-    border-color: var(--accent-color);
+    border-color: var(--port-hover-color);
 }
 .drawflow-node .input {
     left: -10px;
@@ -322,7 +381,7 @@ summary .log-header { margin-bottom: 0; }
 .modal-content h2 { margin: 0 0 1.5rem 0; }
 .tool-list-container { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
 .tool-list-container button { padding: 0.75rem 1rem; background-color: var(--background-light); border: 1px solid var(--border-color); color: var(--font-primary); border-radius: 6px; text-align: left; cursor: pointer; transition: background-color 0.2s; }
-.tool-list-container button:hover { background-color: #2a2a2a; }
+.tool-list-container button:hover { background-color: var(--surface-color); }
 .modal-close-btn { background: none; border: 1px solid var(--font-secondary); color: var(--font-secondary); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
 
 /* --- HEADER LOGO STYLES --- */
@@ -334,7 +393,10 @@ summary .log-header { margin-bottom: 0; }
 
 .header-logo {
     height: 40px;
-    width: auto;
+    width: 50px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 .logo-container h1 {
@@ -343,4 +405,13 @@ summary .log-header { margin-bottom: 0; }
     font-weight: 400;
     margin: 0;
     color: var(--font-secondary);
+}
+
+.header-logo,
+html[data-theme="dark"] .header-logo {
+    background-image: url('/assets/studio-logo.png');
+}
+
+html[data-theme="light"] .header-logo {
+    background-image: url('/assets/studio-logo-light.png');
 }

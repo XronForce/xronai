@@ -13,11 +13,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const ICONS = {
         USER: icons.USER,
         AGENT: icons.AGENT,
-        DELEGATE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.75 9.75a.75.75 0 01.75.75v5.42l1.63-1.916a.75.75 0 111.14 1.01l-3.25 3.81a.75.75 0 01-1.139-.001l-3.25-3.81a.75.75 0 111.14-1.01L15 15.92V10.5a.75.75 0 01.75-.75z" /><path fill-rule="evenodd" d="M5 4.5a.75.75 0 01.75.75v10.5a.75.75 0 01-1.5 0V5.25A.75.75 0 015 4.5zm4.5.75A.75.75 0 008.75 6v10.5a.75.75 0 001.5 0V6a.75.75 0 00-.75-.75z" clip-rule="evenodd" /></svg>`,
-        TOOL_CALL: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 6.75a5.25 5.25 0 015.25 5.25c0 1.254-.438 2.404-1.192 3.352l-.16.213-.11.148-1.924 2.565a.75.75 0 11-1.12-1.002l1.924-2.565.11-.148.16-.213a3.75 3.75 0 00.862-2.352 3.75 3.75 0 00-7.5 0c0 .92.336 1.763.863 2.352l.16.213.11.148 1.923 2.565a.75.75 0 01-1.12 1.002L7.33 15.352l.11-.148.16-.213A5.25 5.25 0 0112 6.75zM11.25 21a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V21z" clip-rule="evenodd" /><path d="M4.125 10.125a.75.75 0 01.75-.75H6a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H4.875a.75.75 0 01-.75-.75V10.125zM17.25 10.125a.75.75 0 01.75-.75h1.125a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H18a.75.75 0 01-.75-.75V10.125zM12 2.25a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V3a.75.75 0 01.75-.75z" /></svg>`,
-        TOOL_RESPONSE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M11.666 4.038a.75.75 0 01.668 0l7.5 4.5a.75.75 0 010 1.324l-7.5 4.5a.75.75 0 01-.668 0l-7.5-4.5a.75.75 0 010-1.324l7.5-4.5zM12 16.121l7.5-4.5-7.5-4.5-7.5 4.5 7.5 4.5z" clip-rule="evenodd" /><path d="M3.693 12.617a.75.75 0 01.668 0l7.5 4.5a.75.75 0 010 1.324l-7.5 4.5a.75.75 0 01-1.02-.662V13.28a.75.75 0 01.352-.662z" /><path d="M20.307 12.617a.75.75 0 00-.668 0l-7.5 4.5a.75.75 0 000 1.324l7.5 4.5a.75.75 0 001.02-.662V13.28a.75.75 0 00-.352-.662z" /></svg>`,
-        FINAL_RESPONSE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12.97 3.97a.75.75 0 011.06 0l7.5 7.5a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 11-1.06-1.06l6.22-6.22H3a.75.75 0 010-1.5h16.19l-6.22-6.22a.75.75 0 010-1.06z" clip-rule="evenodd" /></svg>`,
-        ERROR: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" /></svg>`
+        DELEGATE: icons.DELEGATE,
+        TOOL_CALL: icons.TOOL_CALL,
+        TOOL_RESPONSE: icons.TOOL,
+        FINAL_RESPONSE: icons.FINAL_RESPONSE,
+        ERROR: icons.ERROR,
     };
 
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
@@ -65,6 +65,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     editor.reroute_fix_curvature = true;
     editor.force_first_input = false;
     editor.start();
+
+    const zoomInBtn = document.getElementById('zoom-in-btn');
+    const zoomOutBtn = document.getElementById('zoom-out-btn');
+    const centerViewBtn = document.getElementById('center-view-btn');
+    const lockCanvasBtn = document.getElementById('lock-canvas-btn');
+    const lockIcon = lockCanvasBtn.querySelector('.lock-icon-locked');
+    const unlockIcon = lockCanvasBtn.querySelector('.lock-icon-unlocked');
+
+    zoomInBtn.addEventListener('click', () => editor.zoom_in());
+    zoomOutBtn.addEventListener('click', () => editor.zoom_out());
+    centerViewBtn.addEventListener('click', () => editor.zoom_reset());
+
+    lockCanvasBtn.addEventListener('click', () => {
+        const isLocked = editor.editor_mode === 'fixed';
+        if (isLocked) {
+            // Unlock
+            editor.editor_mode = 'edit';
+            lockCanvasBtn.classList.remove('locked');
+            lockCanvasBtn.title = 'Lock Canvas';
+            lockIcon.style.display = 'none';
+            unlockIcon.style.display = 'block';
+        } else {
+            // Lock
+            editor.editor_mode = 'fixed';
+            lockCanvasBtn.classList.add('locked');
+            lockCanvasBtn.title = 'Unlock Canvas';
+            lockIcon.style.display = 'block';
+            unlockIcon.style.display = 'none';
+        }
+    });
 
     editor.on('nodeCreated', updateAddUserButtonState);
     editor.on('nodeRemoved', updateAddUserButtonState);
