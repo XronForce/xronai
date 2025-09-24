@@ -1,5 +1,7 @@
+import os
 import logging
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -10,10 +12,14 @@ from studio.server.state import StateManager
 from xronai.tools import TOOL_REGISTRY
 from studio.server.export_utils import generate_yaml_config
 
+from xronai.config import load_yaml_config
+from studio.server.yaml_to_drawflow import convert_yaml_to_drawflow
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 state_manager = StateManager()
+initial_config_path: str = None
 
 
 class CompileRequest(BaseModel):
@@ -27,12 +33,37 @@ class ExportRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global initial_config_path
     logger.info("Server is starting up.")
+    config_path = os.getenv("XRONAI_CONFIG_PATH")
+    if config_path and os.path.exists(config_path):
+        initial_config_path = config_path
+        logger.info(f"Initial workflow config path set to: {initial_config_path}")
+    else:
+        logger.info("No initial workflow config provided, will start with a blank canvas.")
     yield
     logger.info("Server is shutting down.")
 
 
 app = FastAPI(title="XronAI Studio Server", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/api/v1/workflow/graph")
+async def get_current_workflow_graph():
+    """
+    If an initial config file was provided, load it and convert it to Drawflow JSON.
+    Otherwise, return an empty object for a blank canvas.
+    """
+    if initial_config_path:
+        try:
+            logger.info(f"Loading and converting YAML from {initial_config_path} for UI.")
+            yaml_config = load_yaml_config(initial_config_path)
+            drawflow_json = convert_yaml_to_drawflow(yaml_config)
+            return drawflow_json
+        except Exception as e:
+            logger.error(f"Failed to convert YAML to Drawflow JSON: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error processing config file: {e}")
+    return {}
 
 
 @app.get("/api/v1/tools/schemas")
@@ -60,6 +91,7 @@ async def get_node_details(node_id: str):
 async def compile_workflow(request: CompileRequest):
     """
     Receives a Drawflow graph from the frontend and builds a runnable workflow.
+    This is now ONLY called when the user clicks the "Chat" button.
     """
     try:
         await state_manager.compile_workflow_from_json(request.model_dump())

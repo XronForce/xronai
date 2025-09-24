@@ -80,14 +80,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     lockCanvasBtn.addEventListener('click', () => {
         const isLocked = editor.editor_mode === 'fixed';
         if (isLocked) {
-            // Unlock
             editor.editor_mode = 'edit';
             lockCanvasBtn.classList.remove('locked');
             lockCanvasBtn.title = 'Lock Canvas';
             lockIcon.style.display = 'none';
             unlockIcon.style.display = 'block';
         } else {
-            // Lock
             editor.editor_mode = 'fixed';
             lockCanvasBtn.classList.add('locked');
             lockCanvasBtn.title = 'Unlock Canvas';
@@ -121,6 +119,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById('add-agent-btn').innerHTML = NODE_ICONS.AGENT;
         document.getElementById('add-tool-btn').innerHTML = NODE_ICONS.TOOL;
         document.getElementById('add-mcp-btn').innerHTML = NODE_ICONS.MCP;
+    }
+
+    function updateImportedNodeIcons() {
+        const workflowData = editor.export();
+        if (!workflowData.drawflow?.Home?.data) return;
+
+        for (const nodeId in workflowData.drawflow.Home.data) {
+            const nodeInfo = workflowData.drawflow.Home.data[nodeId];
+            const nodeElement = document.getElementById(`node-${nodeId}`);
+            if (nodeElement) {
+                const iconContainer = nodeElement.querySelector('.node-icon-container');
+                const nodeClass = nodeInfo.class.toUpperCase();
+                if (iconContainer && NODE_ICONS[nodeClass]) {
+                    iconContainer.innerHTML = NODE_ICONS[nodeClass];
+                }
+            }
+        }
     }
 
     function addMessage(type, title, content, source, isCollapsible = false) {
@@ -253,21 +268,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function loadDefaultWorkflow() {
+        console.log("Loading default empty workflow.");
         editor.clear();
-        const userNodeId = addNode('user', 'User Input');
-        // const agentNodeId = addNode('agent', 'Default Agent');
-        // editor.addConnection(userNodeId, agentNodeId, "output_1", "input_1");
+        addNode('user', 'User Input');
+        updateAddUserButtonState();
     }
 
     function addNode(type, typeOrTitle) {
         let baseName = typeOrTitle;
-        // Generate a default subtitle based on the type
         let subtitle = `${type.charAt(0).toUpperCase() + type.slice(1)} Node`;
-
         let nodeData = {};
         let inputs = 1;
         let outputs = 1;
-        
         let iconSvg = NODE_ICONS[type.toUpperCase()];
         let nodeClass = type;
 
@@ -278,7 +290,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             case 'agent':
                 nodeData = { system_message: `You are the ${baseName} agent.`, keep_history: true, output_schema: "", strict: false };
                 break;
-
             case 'user':
                 inputs = 0;
                 subtitle = "Workflow Entry Point";
@@ -297,7 +308,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 break;
         }
 
-        // Common data for all nodes
         nodeData.uuid = uuidv4();
         nodeData.name = baseName;
 
@@ -324,7 +334,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const updateNodeVisuals = (newNodeData) => {
             const nodeElement = document.querySelector(`#node-${id}`);
             if (!nodeElement) return;
-
             const titleElement = nodeElement.querySelector('.node-title');
             if (titleElement) titleElement.textContent = newNodeData.name;
         };
@@ -447,9 +456,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                  const newName = document.getElementById('node-name-input').value;
                  if (!newName.trim()) { alert("Node name cannot be empty."); return; }
                  const updatedData = {
-                    ...nodeData,
-                    name: newName,
-                    type: document.getElementById('mcp-type-select').value,
+                    ...nodeData, name: newName, type: document.getElementById('mcp-type-select').value,
                     url: document.getElementById('mcp-url-input').value,
                     auth_token: document.getElementById('mcp-token-input').value,
                     script_path: document.getElementById('mcp-script-path-input').value,
@@ -472,7 +479,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div class="config-section"><h3>System Message</h3><textarea id="system-message-input" class="config-textarea">${nodeData.system_message || ''}</textarea></div>`;
 
         if (node.class === 'supervisor') {
-            panelHtml += `<div class="config-section toggle-section"><label for="use-agents-toggle">Can Respond Directly</label><input type="checkbox" id="use-agents-toggle" class="toggle-switch" ${nodeData.use_agents ? 'checked' : ''}></div>`;
+            panelHtml += `<div class="config-section toggle-section"><label for="use-agents-toggle">Use Agents</label><input type="checkbox" id="use-agents-toggle" class="toggle-switch" ${nodeData.use_agents ? 'checked' : ''}></div>`;
         }
         if (node.class === 'agent') {
             panelHtml += `<div class="config-section toggle-section"><label for="keep-history-toggle">Remember History</label><input type="checkbox" id="keep-history-toggle" class="toggle-switch" ${nodeData.keep_history ? 'checked' : ''}></div>
@@ -641,8 +648,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             exportWorkflowBtn.disabled = false;
         }
     }
-
-    await fetchToolSchemas();
     
     editWorkflowBtn.addEventListener('click', () => setMode('design'));
     startChatBtn.addEventListener('click', () => setMode('chat'));
@@ -654,38 +659,68 @@ document.addEventListener("DOMContentLoaded", async () => {
     closeModalBtn.addEventListener('click', () => addToolModal.style.display = 'none');
     document.getElementById('add-mcp-btn').addEventListener('click', () => addNode('mcp', 'MCP Server'));
     
-    setMode('design');
-    loadDefaultWorkflow();
-    updateAddUserButtonState();
-    populateToolbarIcons();
+    async function initialize() {
+        showLoadingOverlay("Initializing Studio...");
+        try {
+            const response = await fetch('/api/v1/workflow/graph');
+            if (!response.ok) {
+                throw new Error(`Server returned status ${response.status}`);
+            }
+            const graphData = await response.json();
 
-    const resizer = document.querySelector('.resizer');
-    const contextualPanel = document.querySelector('.contextual-panel');
-    let isResizing = false;
+            if (graphData && graphData.drawflow && Object.keys(graphData.drawflow.Home.data).length > 0) {
+                console.log("Found pre-loaded workflow. Importing.");
+                editor.import(graphData);
+                
+                // MODIFIED: Call the new function to add icons after importing
+                setTimeout(() => {
+                    updateImportedNodeIcons();
+                    updateAddUserButtonState();
+                }, 100); // Small delay for rendering
+            } else {
+                console.log("No pre-loaded workflow found. Creating a default one.");
+                loadDefaultWorkflow();
+            }
+        } catch (error) {
+            console.error("Failed to initialize workflow from backend:", error);
+            alert("Could not load initial workflow from the server. Starting with a blank canvas.");
+            loadDefaultWorkflow();
+        } finally {
+            hideLoadingOverlay();
+        }
 
-    resizer.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        document.body.style.userSelect = 'none';
-        document.body.style.pointerEvents = 'none';
+        await fetchToolSchemas();
+        setMode('design');
+        populateToolbarIcons();
 
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', stopResizing);
-    });
+        const resizer = document.querySelector('.resizer');
+        const contextualPanel = document.querySelector('.contextual-panel');
+        let isResizing = false;
 
-    function handleMouseMove(e) {
-        if (!isResizing) return;
-        const newWidth = window.innerWidth - e.clientX;
-        if (newWidth > 400 && newWidth < window.innerWidth - 400) {
-            contextualPanel.style.width = `${newWidth}px`;
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.userSelect = 'none';
+            document.body.style.pointerEvents = 'none';
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', stopResizing);
+        });
+
+        function handleMouseMove(e) {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 400 && newWidth < window.innerWidth - 400) {
+                contextualPanel.style.width = `${newWidth}px`;
+            }
+        }
+
+        function stopResizing() {
+            isResizing = false;
+            document.body.style.userSelect = '';
+            document.body.style.pointerEvents = '';
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', stopResizing);
         }
     }
 
-    function stopResizing() {
-        isResizing = false;
-        document.body.style.userSelect = '';
-        document.body.style.pointerEvents = '';
-        
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', stopResizing);
-    }
+    initialize();
 });

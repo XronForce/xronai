@@ -53,7 +53,7 @@ async def start_studio_server(config, host, port, no_browser, reload):
     if not no_browser and not reload:
 
         async def open_browser_after_delay():
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
             webbrowser.open_new_tab(base_url)
 
         asyncio.create_task(open_browser_after_delay())

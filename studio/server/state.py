@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import asyncio
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any
 from dotenv import load_dotenv
 
 from xronai.core import Supervisor, Agent
@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 class StateManager:
     """
     Manages the in-memory state of the XronAI workflow for the studio server.
-    Follows a "Compile on Demand" model where the entire workflow is rebuilt
-    from a frontend graph snapshot.
+    The workflow is only compiled into live objects when the user initiates a chat session.
     """
 
     def __init__(self):
@@ -48,6 +47,9 @@ class StateManager:
         return None
 
     async def compile_workflow_from_json(self, drawflow_export: Dict[str, Any]) -> None:
+        """
+        Receives a Drawflow graph and compiles it into live, runnable Agent and Supervisor objects.
+        """
         self.chat_entry_point = None
         nodes_by_uuid: Dict[str, Union[Supervisor, Agent]] = {}
         node_data_by_drawflow_id: Dict[str, Dict] = {}
@@ -76,11 +78,19 @@ class StateManager:
             node_type = node_info.get("class")
 
             if node_type == "agent":
+                output_schema_str = node_data.get("output_schema", "null")
+                try:
+                    output_schema = json.loads(
+                        output_schema_str) if output_schema_str and output_schema_str.strip() else None
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in output_schema for agent {name}. Setting to null.")
+                    output_schema = None
+
                 new_node = Agent(name=name,
                                  llm_config=self.llm_config,
                                  system_message=node_data.get("system_message", f"You are {name}."),
                                  keep_history=node_data.get("keep_history", True),
-                                 output_schema=json.loads(node_data.get("output_schema", "null") or "null"),
+                                 output_schema=output_schema,
                                  strict=node_data.get("strict", False),
                                  mcp_servers=[],
                                  tools=[],
@@ -148,7 +158,6 @@ class StateManager:
                     elif target_class == "tool":
                         tool_type = target_data.get("tool_type")
                         tool_config = target_data.get("config", {})
-
                         ToolClass = TOOL_REGISTRY.get(tool_type)
                         if ToolClass:
                             try:
@@ -157,10 +166,9 @@ class StateManager:
                                 source_node.use_tools = True
                                 logger.info(f"Attached configured tool '{tool_type}' to Agent '{source_node.name}'.")
                             except Exception as e:
-                                logger.error(
-                                    f"Failed to instantiate tool '{tool_type}' for agent '{source_node.name}': {e}")
+                                logger.error(f"Failed to instantiate tool '{tool_type}': {e}")
                         else:
-                            logger.warning(f"Tool type '{tool_type}' selected in UI but not found in backend registry.")
+                            logger.warning(f"Tool type '{tool_type}' not in registry.")
 
         for node in nodes_by_uuid.values():
             if isinstance(node, Agent) and node.mcp_servers:
