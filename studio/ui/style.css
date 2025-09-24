@@ -155,7 +155,7 @@ body, html {
 .studio-container.chat-mode .configuration-view { display: none; }
 .studio-container.chat-mode .chat-view { display: flex; flex-direction: column; height: 100%; }
 .studio-container.chat-mode .workspace-panel { filter: blur(2px); opacity: 0.6; }
-.resizer { width: 1px; background-color: var(--border-color); cursor: col-resize; flex-shrink: 0; z-index: 10; }
+.resizer { width: 3px; background-color: var(--border-color); cursor: col-resize; flex-shrink: 0; z-index: 10; }
 .resizer:hover { background-color: var(--accent-color); }
 
 /* --- CHAT VIEW STYLES --- */
