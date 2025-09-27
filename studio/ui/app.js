@@ -285,10 +285,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         switch (type) {
             case 'supervisor':
-                nodeData = { system_message: `You are the ${baseName} supervisor.`, use_agents: true };
+                nodeData = { system_message: `You are a supervisor.`, use_agents: true };
                 break;
             case 'agent':
-                nodeData = { system_message: `You are the ${baseName} agent.`, keep_history: true, output_schema: "", strict: false };
+                nodeData = { system_message: `You are a agent.`, keep_history: true, output_schema: "", strict: false };
                 break;
             case 'user':
                 inputs = 0;

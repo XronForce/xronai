@@ -116,12 +116,17 @@ class Supervisor(AI):
             and execution."""
 
     def _initialize_chat_history(self) -> None:
-        """Initialize chat history with system message and record in history manager."""
-        if self.system_message:
-            system_msg = {'role': 'system', 'content': self.system_message}
-            self.chat_history = [system_msg]
+        """
+        Initialize chat history with system message and record in history manager,
+        only if one doesn't already exist for this session.
+        """
+        if self.system_message and self.history_manager:
+            if not self.history_manager.has_system_message(self.name):
+                system_msg = {'role': 'system', 'content': self.system_message}
 
-            if self.history_manager:
+                if not self.chat_history or self.chat_history[0].get('role') != 'system':
+                    self.chat_history.insert(0, system_msg)
+
                 self.history_manager.append_message(message=system_msg,
                                                     sender_type=EntityType.MAIN_SUPERVISOR
                                                     if not self.is_assistant else EntityType.ASSISTANT_SUPERVISOR,
