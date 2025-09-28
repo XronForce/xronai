@@ -48,11 +48,13 @@ def _build_node_config(node_id: str, all_nodes_map: Dict[str, Any], connections_
     elif node_class == "agent":
         config["keep_history"] = node_data.get("keep_history", True)
 
-        output_schema = node_data.get("output_schema")
-        if output_schema and output_schema.strip():
+        output_schema_str = node_data.get("output_schema")
+        if output_schema_str and output_schema_str.strip():
             try:
-                config["output_schema"] = yaml.safe_load(output_schema)
-                config["strict"] = node_data.get("strict", False)
+                loaded_schema = yaml.safe_load(output_schema_str)
+                if isinstance(loaded_schema, dict):
+                    config["output_schema"] = loaded_schema
+                    config["strict"] = node_data.get("strict", False)
             except yaml.YAMLError:
                 pass
 
@@ -86,12 +88,18 @@ def _build_node_config(node_id: str, all_nodes_map: Dict[str, Any], connections_
                         tool_instance = ToolClass(**tool_config_from_ui)
                         metadata = tool_instance.get_metadata()['function']
 
+                        required_params = metadata.get('parameters', {}).get('required', [])
+
                         tool_entry = {
                             "name": metadata.get('name'),
                             "type": "class" if isinstance(TOOL_REGISTRY[tool_type], type) else "function",
                             "python_path": f"{ToolClass.__module__}.{ToolClass.__name__}",
                             "description": metadata.get('description'),
-                            "parameters": metadata.get('parameters', {}).get('properties', {}),
+                            "parameters": {
+                                k: v
+                                for k, v in metadata.get('parameters', {}).get('properties', {}).items()
+                                if k in required_params
+                            },
                             "config": tool_config_from_ui
                         }
                         tools.append(tool_entry)
@@ -140,25 +148,12 @@ def generate_yaml_config(drawflow_export: Dict[str, Any]) -> str:
         raise ValueError("Failed to build configuration from the root node.")
 
     if root_config['type'] == 'supervisor':
+
         root_config['is_assistant'] = False
-
-    final_config = {"workflow_id": "exported-workflow", "supervisor": root_config}
-
-    if root_config['type'] == 'agent':
-        final_config = {
-            "workflow_id": "exported-workflow",
-            "supervisor": {
-                "name": "MainSupervisor",
-                "type": "supervisor",
-                "is_assistant": False,
-                "llm_config": {
-                    "model": "${LLM_MODEL}",
-                    "api_key": "${LLM_API_KEY}",
-                    "base_url": "${LLM_BASE_URL}",
-                },
-                "system_message": "You are the main supervisor coordinating the workflow.",
-                "children": [root_config]
-            }
-        }
+        final_config = {"workflow_id": "exported-workflow", "supervisor": root_config}
+    elif root_config['type'] == 'agent':
+        final_config = {"workflow_id": "exported-workflow", "agent": root_config}
+    else:
+        raise TypeError(f"Unsupported root node type: {root_config.get('type')}")
 
     return yaml.dump(final_config, Dumper=SafeDumper, sort_keys=False, indent=2)

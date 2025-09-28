@@ -1,5 +1,6 @@
 import uuid
 import json
+import yaml
 from typing import Dict, Any, List
 from collections import defaultdict
 from xronai.tools import TOOL_REGISTRY
@@ -57,8 +58,14 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
                 level_counts[tool_level] += 1
                 node_positions[mcp_name] = {'level': tool_level, 'y_index': level_counts[tool_level] - 1}
 
-    root_supervisor_config = config['supervisor']
-    discover_nodes(root_supervisor_config, 0)
+    if 'supervisor' in config:
+        root_node_config = config['supervisor']
+    elif 'agent' in config:
+        root_node_config = config['agent']
+    else:
+        raise ValueError("Invalid YAML: Configuration must contain a root 'supervisor' or 'agent' key.")
+
+    discover_nodes(root_node_config, 0)
 
     def build_node(node_config: Dict):
         nonlocal next_id
@@ -77,26 +84,22 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
         pos_x = BASE_X + pos['level'] * X_SPACING
         pos_y = start_y + pos['y_index'] * Y_SPACING
 
+        output_schema_val = node_config.get('output_schema', '')
+        output_schema_str = yaml.dump(output_schema_val, indent=2) if output_schema_val else ""
+
         node_data = {
-            "uuid":
-                str(uuid.uuid4()),
-            "name":
-                name,
-            "system_message":
-                node_config.get('system_message', ''),
-            "keep_history":
-                node_config.get('keep_history', True),
-            "output_schema":
-                json.dumps(node_config.get('output_schema', ''), indent=2) if node_config.get('output_schema') else "",
-            "strict":
-                node_config.get('strict', False),
-            "use_agents":
-                node_config.get('is_assistant', True)
+            "uuid": str(uuid.uuid4()),
+            "name": name,
+            "system_message": node_config.get('system_message', ''),
+            "keep_history": node_config.get('keep_history', True),
+            "output_schema": output_schema_str,
+            "strict": node_config.get('strict', False),
+            "use_agents": node_config.get('is_assistant', True)
         }
         subtitle = "Supervisor" if node_type == "supervisor" else "Agent"
 
         drawflow_nodes[df_id] = {
-            "id": df_id,
+            "id": int(df_id),
             "name": name,
             "data": node_data,
             "class": node_type,
@@ -144,7 +147,7 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
                     "config": tool.get('config', {})
                 }
                 drawflow_nodes[tool_df_id] = {
-                    "id": tool_df_id,
+                    "id": int(tool_df_id),
                     "name": tool['name'],
                     "data": tool_data,
                     "class": 'tool',
@@ -174,7 +177,7 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
                 mcp_title = mcp.get('url') or mcp.get('script_path', 'MCP Server')
 
                 drawflow_nodes[mcp_df_id] = {
-                    "id": mcp_df_id,
+                    "id": int(mcp_df_id),
                     "name": mcp_title,
                     "data": mcp_data,
                     "class": 'mcp',
@@ -190,7 +193,7 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
                     "pos_y": start_y_mcp + mcp_pos['y_index'] * Y_SPACING
                 }
 
-    build_node(root_supervisor_config)
+    build_node(root_node_config)
 
     def build_connections(node_config: Dict):
         source_name = node_config['name']
@@ -237,12 +240,12 @@ def convert_yaml_to_drawflow(config: Dict[str, Any]) -> Dict[str, Any]:
                         "input": "output_1"
                     })
 
-    build_connections(root_supervisor_config)
+    build_connections(root_node_config)
 
     user_id = str(next_id)
-    root_df_id = node_name_to_df_id[root_supervisor_config['name']]
+    root_df_id = node_name_to_df_id[root_node_config['name']]
     drawflow_nodes[user_id] = {
-        "id": user_id,
+        "id": int(user_id),
         "name": 'User',
         "data": {
             "uuid": "user-node-uuid",

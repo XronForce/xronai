@@ -7,7 +7,7 @@ from a YAML file.
 """
 
 import importlib, uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from xronai.core import Supervisor, Agent
 from .config_validator import ConfigValidator
 
@@ -23,9 +23,10 @@ class AgentFactory:
     """
 
     @staticmethod
-    async def create_from_config(config: Dict[str, Any], history_base_path: Optional[str] = None) -> Supervisor:
+    async def create_from_config(config: Dict[str, Any],
+                                 history_base_path: Optional[str] = None) -> Union[Supervisor, Agent]:
         """
-        Create a Supervisor with its entire hierarchy from a configuration dictionary.
+        Create a Supervisor or a standalone Agent from a configuration dictionary.
 
         Args:
             config (Dict[str, Any]): The configuration dictionary containing
@@ -33,7 +34,7 @@ class AgentFactory:
             history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
-            Supervisor: The root Supervisor of the created hierarchy.
+            Union[Supervisor, Agent]: The root Supervisor or Agent of the created workflow.
 
         Raises:
             ConfigValidationError: If the configuration is invalid.
@@ -41,10 +42,15 @@ class AgentFactory:
         ConfigValidator.validate(config)
         workflow_id = config.get('workflow_id', str(uuid.uuid4()))
 
-        return await AgentFactory._create_supervisor(config['supervisor'],
-                                                     is_root=True,
-                                                     workflow_id=workflow_id,
-                                                     history_base_path=history_base_path)
+        if 'supervisor' in config:
+            return await AgentFactory._create_supervisor(config['supervisor'],
+                                                         is_root=True,
+                                                         workflow_id=workflow_id,
+                                                         history_base_path=history_base_path)
+        elif 'agent' in config:
+            return await AgentFactory._create_agent(config['agent'],
+                                                    workflow_id=workflow_id,
+                                                    history_base_path=history_base_path)
 
     @staticmethod
     async def _create_supervisor(supervisor_config: Dict[str, Any],
@@ -83,12 +89,15 @@ class AgentFactory:
         return supervisor
 
     @staticmethod
-    async def _create_agent(agent_config: Dict[str, Any], history_base_path: Optional[str] = None) -> Agent:
+    async def _create_agent(agent_config: Dict[str, Any],
+                            workflow_id: Optional[str] = None,
+                            history_base_path: Optional[str] = None) -> Agent:
         """
         Create an Agent instance from a configuration dictionary.
 
         Args:
             agent_config (Dict[str, Any]): The configuration for this Agent.
+            workflow_id (Optional[str]): The ID for the workflow, if this is a root agent.
             history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
@@ -100,6 +109,7 @@ class AgentFactory:
             'name': agent_config['name'],
             'llm_config': agent_config['llm_config'],
             'system_message': agent_config['system_message'],
+            'workflow_id': workflow_id,
             'tools': tools,
             'use_tools': agent_config.get('use_tools',
                                           bool(tools) or bool(agent_config.get('mcp_servers'))),

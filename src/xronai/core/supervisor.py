@@ -61,6 +61,7 @@ class Supervisor(AI):
         self.workflow_id = workflow_id
         self.history_base_path = history_base_path
 
+        self.chat_history: List[Dict[str, str]] = []
         self._pending_registrations: List[Union[Agent, 'Supervisor']] = []
         self.system_message = system_message if system_message is not None else self._get_default_system_message()
 
@@ -83,8 +84,6 @@ class Supervisor(AI):
         self.registered_agents: List[Union[Agent, 'Supervisor']] = []
         self.available_tools: List[Dict[str, Any]] = []
         self.use_agents = use_agents
-
-        self.chat_history: List[Dict[str, str]] = []
 
         self.debugger = Debugger(name=self.name, workflow_id=self.workflow_id)
         self.debugger.start_session()
