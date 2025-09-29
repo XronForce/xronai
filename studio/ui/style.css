@@ -248,7 +248,7 @@ summary .log-header { margin-bottom: 0; }
 .drawflow-node.selected.agent { box-shadow: 0 0 15px -2px var(--color-node-agent); border-color: var(--color-node-agent) !important; }
 .drawflow-node.selected.user { box-shadow: 0 0 15px -2px var(--color-node-user); border-color: var(--color-node-user) !important; }
 .drawflow-node.selected.tool { box-shadow: 0 0 15px -2px var(--color-node-tool); border-color: var(--color-node-tool) !important; }
-.drawflow-node.selected.mcp { box-shadow: 0 0 15px -2px var(--color-node-mcp); border-color: var(--color-node-mcp) !important; }
+.drawflow-node.selected.mcp { box-shadow: 0 0 15px -2px var(--accent-color); border-color: var(--accent-color) !important; }
 
 /* Node content layout */
 .drawflow-node .drawflow_content_node {
@@ -368,7 +368,7 @@ summary .log-header { margin-bottom: 0; }
 .node-type-badge.agent { background-color: var(--color-node-agent); }
 .node-type-badge.user { background-color: var(--color-node-user); }
 .node-type-badge.tool { background-color: var(--color-node-tool); }
-.node-type-badge.mcp { background-color: var(--color-node-mcp); }
+.node-type-badge.mcp { background-color: #000000; }
 .config-section { margin-bottom: 1.5rem; }
 .config-section h3 { font-size: 0.9rem; font-weight: 600; color: var(--font-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 0.75rem 0; }
 .config-input, .config-textarea { width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--background-light); color: var(--font-primary); font-size: 14px; font-family: var(--font-family); }
