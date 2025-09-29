@@ -148,4 +148,5 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close()
 
 
-app.mount("/", StaticFiles(directory="studio/ui", html=True), name="ui")
+studio_ui_path = os.path.join(os.path.dirname(__file__), '..', 'ui')
+app.mount("/", StaticFiles(directory=studio_ui_path, html=True), name="ui")
