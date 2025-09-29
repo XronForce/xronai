@@ -35,6 +35,7 @@ class ExportRequest(BaseModel):
 async def lifespan(app: FastAPI):
     global initial_config_path
     logger.info("Server is starting up.")
+    state_manager.load_config()
     config_path = os.getenv("XRONAI_CONFIG_PATH")
     if config_path and os.path.exists(config_path):
         initial_config_path = config_path
