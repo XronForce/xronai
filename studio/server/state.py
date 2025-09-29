@@ -24,9 +24,9 @@ class StateManager:
     def load_config(self):
         """Loads configuration from environment variables."""
         self.llm_config = {
-            "model": os.getenv("LLM_MODEL", "default-model"),
-            "api_key": os.getenv("LLM_API_KEY", "default-key"),
-            "base_url": os.getenv("LLM_BASE_URL", "default-url"),
+            "model": os.getenv("XRONAI_STUDIO_LLM_MODEL", "default-model"),
+            "api_key": os.getenv("XRONAI_STUDIO_LLM_API_KEY", "default-key"),
+            "base_url": os.getenv("XRONAI_STUDIO_LLM_BASE_URL", "default-url"),
         }
         logger.info(f"StateManager loaded config. Base URL set to: '{self.llm_config.get('base_url')}'")
 
