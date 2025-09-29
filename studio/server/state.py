@@ -18,12 +18,17 @@ class StateManager:
 
     def __init__(self):
         self.chat_entry_point: Optional[Union[Supervisor, Agent]] = None
-        self.llm_config: Dict[str, str] = {
+        self.llm_config: Dict[str, str] = {}
+        self.workflow_id: str = "studio-session"
+
+    def load_config(self):
+        """Loads configuration from environment variables."""
+        self.llm_config = {
             "model": os.getenv("LLM_MODEL", "default-model"),
             "api_key": os.getenv("LLM_API_KEY", "default-key"),
             "base_url": os.getenv("LLM_BASE_URL", "default-url"),
         }
-        self.workflow_id: str = "studio-session"
+        logger.info(f"StateManager loaded config. Base URL set to: '{self.llm_config.get('base_url')}'")
 
     def get_root_node(self) -> Optional[Union[Supervisor, Agent]]:
         return self.chat_entry_point
