@@ -95,6 +95,15 @@ def serve(
     """
     Loads and serves a XronAI workflow for production or testing.
     """
+    current_working_directory = Path.cwd()
+    dotenv_path = current_working_directory / ".env"
+
+    if dotenv_path.is_file():
+        print(f"INFO:     Loading environment variables from: {dotenv_path}")
+        load_dotenv(dotenv_path=dotenv_path)
+    else:
+        print(f"INFO:     No .env file found in {current_working_directory}. Using system environment variables.")
+        
     print(f"INFO:     Preparing to serve workflow: {workflow_file}")
 
     os.environ["XRONAI_WORKFLOW_FILE"] = str(workflow_file.resolve())
