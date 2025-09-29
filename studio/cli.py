@@ -8,7 +8,6 @@ from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
 
 app = typer.Typer(name="xronai", help="The command-line interface for the XronAI SDK.", add_completion=False)
 
@@ -31,6 +30,12 @@ def studio(config: Annotated[Optional[str],
     """
     Launches the XronAI Studio, a web-based UI for building and managing agentic workflows.
     """
+    load_dotenv()
+    
+    os.environ["XRONAI_STUDIO_LLM_MODEL"] = os.getenv("LLM_MODEL", "not-set")
+    os.environ["XRONAI_STUDIO_LLM_API_KEY"] = os.getenv("LLM_API_KEY", "not-set")
+    os.environ["XRONAI_STUDIO_LLM_BASE_URL"] = os.getenv("LLM_BASE_URL", "not-set")
+    
     asyncio.run(start_studio_server(config=config, host=host, port=port, no_browser=no_browser, reload=reload))
 
 
