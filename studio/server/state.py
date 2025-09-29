@@ -3,12 +3,10 @@ import json
 import logging
 import asyncio
 from typing import Optional, Union, Dict, Any
-from dotenv import load_dotenv
 
 from xronai.core import Supervisor, Agent
 from xronai.tools import TOOL_REGISTRY
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 

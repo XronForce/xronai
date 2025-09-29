@@ -6,6 +6,9 @@ import asyncio
 from typing_extensions import Annotated
 from typing import Optional
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = typer.Typer(name="xronai", help="The command-line interface for the XronAI SDK.", add_completion=False)
 
