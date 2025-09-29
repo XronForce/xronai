@@ -30,11 +30,18 @@ def studio(config: Annotated[Optional[str],
     """
     Launches the XronAI Studio, a web-based UI for building and managing agentic workflows.
     """
-    load_dotenv()
-    
-    os.environ["XRONAI_STUDIO_LLM_MODEL"] = os.getenv("LLM_MODEL", "not-set")
-    os.environ["XRONAI_STUDIO_LLM_API_KEY"] = os.getenv("LLM_API_KEY", "not-set")
-    os.environ["XRONAI_STUDIO_LLM_BASE_URL"] = os.getenv("LLM_BASE_URL", "not-set")
+    current_working_directory = Path.cwd()
+    dotenv_path = current_working_directory / ".env"
+
+    if dotenv_path.is_file():
+        print(f"INFO:     Loading environment variables from: {dotenv_path}")
+        load_dotenv(dotenv_path=dotenv_path)
+    else:
+        print(f"INFO:     No .env file found in {current_working_directory}. Using system environment variables.")
+
+    os.environ["XRONAI_STUDIO_LLM_MODEL"] = os.getenv("LLM_MODEL", "default-model")
+    os.environ["XRONAI_STUDIO_LLM_API_KEY"] = os.getenv("LLM_API_KEY", "default-key")
+    os.environ["XRONAI_STUDIO_LLM_BASE_URL"] = os.getenv("LLM_BASE_URL", "default-url")
     
     asyncio.run(start_studio_server(config=config, host=host, port=port, no_browser=no_browser, reload=reload))
 
