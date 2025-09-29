@@ -38,7 +38,19 @@ class ConfigValidator:
         Raises:
             ConfigValidationError: If the configuration is invalid.
         """
-        ConfigValidator._validate_supervisor(config.get('supervisor', {}), is_root=True)
+        has_supervisor = 'supervisor' in config
+        has_agent = 'agent' in config
+
+        if not has_supervisor and not has_agent:
+            raise ConfigValidationError("Configuration must contain a root 'supervisor' or 'agent' key.")
+
+        if has_supervisor and has_agent:
+            raise ConfigValidationError("Configuration cannot contain both a root 'supervisor' and 'agent' key.")
+
+        if has_supervisor:
+            ConfigValidator._validate_supervisor(config['supervisor'], is_root=True)
+        elif has_agent:
+            ConfigValidator._validate_agent(config['agent'])
 
     @staticmethod
     def _validate_supervisor(supervisor: Dict[str, Any], is_root: bool = False) -> None:
@@ -54,7 +66,8 @@ class ConfigValidator:
         """
         required_fields = ['name', 'type', 'llm_config', 'system_message']
         if is_root:
-            required_fields.append('children')
+            if 'children' in supervisor and not isinstance(supervisor['children'], list):
+                raise ConfigValidationError("'children' must be a list of agent/supervisor configurations.")
 
         for field in required_fields:
             if field not in supervisor:
@@ -96,6 +109,9 @@ class ConfigValidator:
         for field in required_fields:
             if field not in agent:
                 raise ConfigValidationError(f"Missing required field '{field}' in agent configuration")
+
+        if agent['type'] != 'agent':
+            raise ConfigValidationError(f"Invalid type for agent: {agent['type']}")
 
         bool_fields = ['keep_history', 'use_tools', 'strict']
         for field in bool_fields:
@@ -157,5 +173,5 @@ class ConfigValidator:
                 if field not in tool:
                     raise ConfigValidationError(f"Missing required field '{field}' in tool configuration")
 
-            if tool['type'] != 'function':
-                raise ConfigValidationError(f"Invalid tool type: {tool['type']}")
+            if tool['type'] not in ['function', 'class']:
+                raise ConfigValidationError(f"Invalid tool type: {tool['type']}. Must be 'function' or 'class'.")

@@ -7,7 +7,8 @@ users and multiple specialized AI agents.
 
 import json, uuid
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Union, Callable
 from openai.types.chat import ChatCompletionMessage
 from xronai.core import AI
 from xronai.core import Agent
@@ -33,7 +34,8 @@ class Supervisor(AI):
                  workflow_id: Optional[str] = None,
                  is_assistant: bool = False,
                  system_message: Optional[str] = None,
-                 use_agents: bool = True):
+                 use_agents: bool = True,
+                 history_base_path: Optional[str] = None):
         """
         Initialize the Supervisor instance.
 
@@ -44,6 +46,7 @@ class Supervisor(AI):
             is_assistant (bool): Whether this is an assistant supervisor.
             system_message (Optional[str]): The initial system message for the agent.
             use_agents (bool): Whether to use agents or not.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Raises:
             ValueError: If the name is empty or if workflow management rules are violated.
@@ -56,22 +59,24 @@ class Supervisor(AI):
         self.name = name
         self.is_assistant = is_assistant
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
 
+        self.chat_history: List[Dict[str, str]] = []
         self._pending_registrations: List[Union[Agent, 'Supervisor']] = []
         self.system_message = system_message if system_message is not None else self._get_default_system_message()
 
         if not is_assistant:
             if workflow_id:
                 try:
-                    self.history_manager = HistoryManager(workflow_id)
-                except:
+                    self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
+                except ValueError:
                     self._initialize_workflow()
-                    self.history_manager = HistoryManager(workflow_id)
+                    self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
                 if not self.history_manager.has_system_message(self.name):
                     self._initialize_chat_history()
             else:
                 self._initialize_workflow()
-                self.history_manager = HistoryManager(self.workflow_id)
+                self.history_manager = HistoryManager(self.workflow_id, base_path=self.history_base_path)
                 self._initialize_chat_history()
         else:
             self.history_manager = None
@@ -80,10 +85,19 @@ class Supervisor(AI):
         self.available_tools: List[Dict[str, Any]] = []
         self.use_agents = use_agents
 
-        self.chat_history: List[Dict[str, str]] = []
-
         self.debugger = Debugger(name=self.name, workflow_id=self.workflow_id)
         self.debugger.start_session()
+
+    def _emit_event(self, on_event: Optional[Callable], event_type: str, data: Dict[str, Any]):
+        """Safely emits an event if the callback is provided."""
+        if on_event:
+            payload = {
+                "id": f"evt_{uuid.uuid4()}",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "type": event_type,
+                "data": data,
+            }
+            on_event(payload)
 
     def _get_default_system_message(self) -> str:
         """
@@ -101,12 +115,17 @@ class Supervisor(AI):
             and execution."""
 
     def _initialize_chat_history(self) -> None:
-        """Initialize chat history with system message and record in history manager."""
-        if self.system_message:
-            system_msg = {'role': 'system', 'content': self.system_message}
-            self.chat_history = [system_msg]
+        """
+        Initialize chat history with system message and record in history manager,
+        only if one doesn't already exist for this session.
+        """
+        if self.system_message and self.history_manager:
+            if not self.history_manager.has_system_message(self.name):
+                system_msg = {'role': 'system', 'content': self.system_message}
 
-            if self.history_manager:
+                if not self.chat_history or self.chat_history[0].get('role') != 'system':
+                    self.chat_history.insert(0, system_msg)
+
                 self.history_manager.append_message(message=system_msg,
                                                     sender_type=EntityType.MAIN_SUPERVISOR
                                                     if not self.is_assistant else EntityType.ASSISTANT_SUPERVISOR,
@@ -139,27 +158,28 @@ class Supervisor(AI):
             self._pending_registrations.append(agent)
             return
 
-        if isinstance(agent, Supervisor):
-            agent.set_workflow_id(self.workflow_id)
-        else:
-            agent.set_workflow_id(self.workflow_id)
-
+        agent.set_workflow_id(self.workflow_id, history_base_path=self.history_base_path)
         self.registered_agents.append(agent)
         self._add_agent_tool(agent)
-        # self.system_message += f"{agent.name}: {agent.system_message}\n"
 
-    def set_workflow_id(self, workflow_id: str) -> None:
+    def set_workflow_id(self, workflow_id: str, history_base_path: Optional[str] = None) -> None:
         """
-        Set the workflow ID for this supervisor.
+        Set the workflow ID and history base path for this supervisor and all its children.
+        This is the key method for ensuring session state is correctly propagated.
         
         Args:
-            workflow_id (str): The workflow ID to set.
+            workflow_id (str): The workflow ID (session ID) to set.
+            history_base_path (Optional[str]): The root directory for storing history logs.
         """
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.debugger.update_workflow_id(workflow_id)
-        self.history_manager = HistoryManager(workflow_id)
+        self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
         self._initialize_chat_history()
         self._process_pending_registrations()
+
+        for agent in self.registered_agents:
+            agent.set_workflow_id(workflow_id, history_base_path=history_base_path)
 
     def _process_pending_registrations(self) -> None:
         """Process any pending agent registrations."""
@@ -221,7 +241,8 @@ class Supervisor(AI):
         if not self.workflow_id:
             self.workflow_id = str(uuid.uuid4())
 
-        workflow_path = Path("xronai_logs") / self.workflow_id
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
         workflow_path.mkdir(parents=True, exist_ok=True)
 
         history_file = workflow_path / "history.jsonl"
@@ -240,7 +261,8 @@ class Supervisor(AI):
     def delegate_to_agent(self,
                           message: ChatCompletionMessage,
                           parent_msg_id: str,
-                          supervisor_chain: Optional[List[str]] = None) -> str:
+                          supervisor_chain: Optional[List[str]] = None,
+                          on_event: Optional[Callable] = None) -> str:
         """
         Delegate a task to the appropriate agent based on the supervisor's response.
 
@@ -248,6 +270,7 @@ class Supervisor(AI):
             message (ChatCompletionMessage): The message containing the delegation information.
             parent_msg_id (str): ID of the parent message in history.
             supervisor_chain (Optional[List[str]]): Chain of supervisors involved in delegation.
+            on_event (Optional[Callable]): The event callback function.
 
         Returns:
             str: The response from the delegated agent.
@@ -259,7 +282,7 @@ class Supervisor(AI):
             raise ValueError("Message does not contain tool calls")
 
         function_call = message.tool_calls[0]
-        target_agent_name = function_call.function.name.replace("delegate_to_", "").lower()
+        target_agent_name = function_call.function.name.replace("delegate_to_", "")
         args = json.loads(function_call.function.arguments)
         reasoning = args.get('reasoning')
         context = args.get('context')
@@ -268,23 +291,44 @@ class Supervisor(AI):
         if not query:
             raise ValueError("Query is missing from the function call")
 
+        target_agent = next((agent for agent in self.registered_agents if agent.name == target_agent_name), None)
+
+        if not target_agent:
+            raise ValueError(f"No agent found with name '{target_agent_name}'")
+
         self.debugger.log(f"[DELEGATION] Agent: {target_agent_name}")
         self.debugger.log(f"[REASONING] {reasoning}")
         self.debugger.log(f"[CONTEXT] {context}")
         self.debugger.log(f"[QUERY] {query}")
 
+        self._emit_event(
+            on_event, "SUPERVISOR_DELEGATE", {
+                "source": {
+                    "name": self.name,
+                    "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                },
+                "target": {
+                    "name": target_agent.name,
+                    "type": "AGENT" if isinstance(target_agent, Agent) else "ASSISTANT_SUPERVISOR"
+                },
+                "reasoning": reasoning,
+                "query_for_agent": query
+            })
+
         current_chain = supervisor_chain or []
         current_chain.append(self.name)
 
-        for agent in self.registered_agents:
-            if agent.name.lower() == target_agent_name:
-                agent_response = agent.chat(query=f"CONTEXT:\n{context}\n\nQUERY:\n{query}", sender_name=self.name)
-                self.debugger.log(f"[RESPONSE] {target_agent_name}: {agent_response}")
-                return agent_response
+        agent_response = target_agent.chat(query=f"CONTEXT:\n{context}\n\nQUERY:\n{query}",
+                                           sender_name=self.name,
+                                           on_event=on_event)
+        self.debugger.log(f"[RESPONSE] {target_agent_name}: {agent_response}")
+        return agent_response
 
-        raise ValueError(f"No agent found with name '{target_agent_name}'")
-
-    def chat(self, query: str, sender_name: Optional[str] = None, supervisor_chain: Optional[List[str]] = None) -> str:
+    def chat(self,
+             query: str,
+             sender_name: Optional[str] = None,
+             supervisor_chain: Optional[List[str]] = None,
+             on_event: Optional[Callable] = None) -> str:
         """
         Process user input and generate a response using the appropriate agents.
 
@@ -292,6 +336,7 @@ class Supervisor(AI):
             query (str): The user's input query.
             sender_name (Optional[str]): Name of the sender (for assistant supervisors).
             supervisor_chain (Optional[List[str]]): Chain of supervisors in delegation.
+            on_event (Optional[Callable]): A callback function to stream events to.
 
         Returns:
             str: The final response to the user's query.
@@ -300,6 +345,8 @@ class Supervisor(AI):
             RuntimeError: If there's an error in processing the user input.
         """
         self.debugger.log(f"[USER INPUT] {query}")
+
+        self._emit_event(on_event, "WORKFLOW_START", {"user_query": query})
 
         current_chain = supervisor_chain or []
         if self.name not in current_chain:
@@ -334,6 +381,15 @@ class Supervisor(AI):
                                                         parent_id=user_msg_id,
                                                         supervisor_chain=current_chain)
 
+                    self._emit_event(
+                        on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                            },
+                            "content": query_answer
+                        })
+                    self._emit_event(on_event, "WORKFLOW_END", {})
                     return query_answer
 
                 tool_call = supervisor_response.message.tool_calls[0]
@@ -365,7 +421,20 @@ class Supervisor(AI):
                 if hasattr(supervisor_response.message, 'tool_calls') and supervisor_response.message.tool_calls:
                     agent_feedback = self.delegate_to_agent(supervisor_response.message,
                                                             tool_msg_id,
-                                                            supervisor_chain=current_chain)
+                                                            supervisor_chain=current_chain,
+                                                            on_event=on_event)
+
+                    self._emit_event(
+                        on_event,
+                        "AGENT_RESPONSE",
+                        {
+                            "source": {
+                                "name": tool_call.function.name.replace("delegate_to_", ""),
+                                "type": "AGENT"
+                            },  # A bit of a hack to get agent name
+                            "content": agent_feedback
+                        })
+
                     feedback_msg = {"role": "tool", "content": agent_feedback, "tool_call_id": tool_call.id}
                     self.chat_history.append(feedback_msg)
 
@@ -376,11 +445,30 @@ class Supervisor(AI):
                                                         tool_call_id=tool_call.id,
                                                         supervisor_chain=current_chain)
                 else:
-                    return supervisor_response.message.content
+                    final_content = supervisor_response.message.content
+                    self._emit_event(
+                        on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                            },
+                            "content": final_content
+                        })
+                    self._emit_event(on_event, "WORKFLOW_END", {})
+                    return final_content
 
         except Exception as e:
             error_msg = f"Error in processing user input: {str(e)}"
             self.debugger.log(f"[ERROR] {error_msg}", level="error")
+            self._emit_event(
+                on_event, "ERROR", {
+                    "source": {
+                        "name": self.name,
+                        "type": "ASSISTANT_SUPERVISOR" if self.is_assistant else "SUPERVISOR"
+                    },
+                    "error_message": error_msg
+                })
+            self._emit_event(on_event, "WORKFLOW_END", {})
             raise RuntimeError(error_msg)
 
     def start_interactive_session(self) -> None:

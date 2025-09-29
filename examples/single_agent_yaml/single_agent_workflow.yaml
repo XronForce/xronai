@@ -1,0 +1,11 @@
+workflow_id: "my-single-agent-test"
+
+agent:
+  name: SoloAgent
+  type: agent
+  llm_config:
+    model: ${LLM_MODEL}
+    api_key: ${LLM_API_KEY}
+    base_url: ${LLM_BASE_URL}
+  system_message: "You are a standalone agent loaded from a YAML file. You respond concisely."
+  keep_history: true

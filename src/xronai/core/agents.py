@@ -5,8 +5,10 @@ This module provides an Agent class that extends the base AI functionality
 with additional features like tool usage and chat history management.
 """
 
-import json, asyncio
-from typing import List, Dict, Optional, Any
+import json, asyncio, uuid
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Optional, Any, Callable
 from openai.types.chat import ChatCompletionMessage
 from xronai.core.ai import AI
 from xronai.history import HistoryManager, EntityType
@@ -35,14 +37,17 @@ class Agent(AI):
                  keep_history: bool = True,
                  mcp_servers: Optional[List[Dict[str, Any]]] = None,
                  output_schema: Optional[Dict[str, Any]] = None,
-                 strict: bool = False):
+                 strict: bool = False,
+                 history_base_path: Optional[str] = None):
         """
         Initialize the Agent instance.
 
         Args:
             name (str): The name of the agent.
             llm_config (Dict[str, str]): Configuration for the language model.
-            workflow_id (Optional[str]): ID of the workflow. Will be set when registered with a Supervisor.
+            workflow_id (Optional[str]): ID of the workflow. If provided, the agent will
+                                       initialize its own persistent history. If not, one
+                                       will be assigned by a Supervisor upon registration.
             tools (Optional[List[Dict[str, Any]]]): List of tools available to the agent.
             system_message (Optional[str]): The initial system message for the agent.
             use_tools (bool): Whether to use tools in interactions.
@@ -54,6 +59,7 @@ class Agent(AI):
                 All discovered tools are available as functions to the agent.
             output_schema (Optional[Dict[str, Any]]): Schema for agent's output format.
             strict (bool): If True, always enforce output schema.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Raises:
             ValueError: If the name is empty.
@@ -65,12 +71,13 @@ class Agent(AI):
 
         self.name = name
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.use_tools = use_tools
         self.tools = tools or []
         self.system_message = system_message
         self.keep_history = keep_history
         self.history_manager = None
-        self.debugger = Debugger(name=self.name, workflow_id=None)
+        self.debugger = Debugger(name=self.name, workflow_id=self.workflow_id)
         self.debugger.start_session()
         self.chat_history: List[Dict[str, str]] = []
         self.mcp_servers = mcp_servers or []
@@ -81,27 +88,82 @@ class Agent(AI):
         if system_message:
             self.set_system_message(system_message)
 
-        asyncio.run(self._load_mcp_tools())
+        if self.workflow_id and self.keep_history:
+            self._initialize_workflow()
 
-    def set_workflow_id(self, workflow_id: str) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            if self.mcp_servers:
+                asyncio.run(self._load_mcp_tools())
+
+    def _initialize_workflow(self):
+        """
+        Initializes the workflow directory and history manager for a standalone agent.
+        """
+        if not self.workflow_id:
+            self.workflow_id = str(uuid.uuid4())
+
+        self.debugger.update_workflow_id(self.workflow_id)
+
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
+        workflow_path.mkdir(parents=True, exist_ok=True)
+
+        history_file = workflow_path / "history.jsonl"
+        if not history_file.exists():
+            history_file.touch()
+
+        self.history_manager = HistoryManager(self.workflow_id, base_path=self.history_base_path)
+
+        self._initialize_chat_history()
+
+        self.chat_history = self.history_manager.load_chat_history(self.name)
+        if len(self.chat_history) > 1:
+            self.debugger.log(f"Previous history loaded for standalone agent {self.name}.")
+
+    def _initialize_chat_history(self):
+        """Saves the system message to history if it doesn't already exist."""
+        if self.system_message and self.history_manager:
+            if not self.history_manager.has_system_message(self.name):
+                self.history_manager.append_message(message={
+                    "role": "system",
+                    "content": self.system_message
+                },
+                                                    sender_type=EntityType.AGENT,
+                                                    sender_name=self.name)
+
+    def _emit_event(self, on_event: Optional[Callable], event_type: str, data: Dict[str, Any]):
+        """Safely emits an event if the callback is provided."""
+        if on_event:
+            payload = {
+                "id": f"evt_{uuid.uuid4()}",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "type": event_type,
+                "data": data,
+            }
+            on_event(payload)
+
+    def set_workflow_id(self, workflow_id: str, history_base_path: Optional[str] = None) -> None:
         """
         Set the workflow ID and initialize the history manager.
-        This method is called by the Supervisor when registering the agent.
+        This method is called by the Supervisor when registering the agent or
+        re-configuring the workflow for a new session.
 
         Args:
-            workflow_id (str): The workflow ID to set.
+            workflow_id (str): The workflow ID (session ID) to set.
+            history_base_path (Optional[str]): The root directory for storing history logs.
         """
         self.workflow_id = workflow_id
+        self.history_base_path = history_base_path
         self.debugger.update_workflow_id(workflow_id)
-        self.history_manager = HistoryManager(workflow_id)
 
-        if self.system_message and not self.history_manager.has_system_message(self.name):
-            self.history_manager.append_message(message={
-                "role": "system",
-                "content": self.system_message
-            },
-                                                sender_type=EntityType.AGENT,
-                                                sender_name=self.name)
+        base_dir = Path(self.history_base_path) if self.history_base_path else Path("xronai_logs")
+        workflow_path = base_dir / self.workflow_id
+        workflow_path.mkdir(parents=True, exist_ok=True)
+
+        self.history_manager = HistoryManager(workflow_id, base_path=self.history_base_path)
+        self._initialize_chat_history()
 
     def set_system_message(self, message: str) -> None:
         """
@@ -154,14 +216,15 @@ class Agent(AI):
                 self.debugger.log("Schema enforcement failed", level="error")
                 return response
 
-    def chat(self, query: str, sender_name: Optional[str] = None) -> str:
+    def chat(self, query: str, sender_name: Optional[str] = None, on_event: Optional[Callable] = None) -> str:
         """
         Process a chat interaction with the agent.
 
         Args:
             query (str): The query to process.
             sender_name (Optional[str]): Name of the entity sending the query.
-                                       Could be a supervisor name or None for direct interactions.
+                                       If None, this agent is treated as the top-level entry point.
+            on_event (Optional[Callable]): A callback function to stream events to.
 
         Returns:
             str: The agent's response to the query.
@@ -170,6 +233,10 @@ class Agent(AI):
             RuntimeError: If there's an error processing the query or using tools.
         """
         self.debugger.log(f"Query received from {sender_name or 'direct'}: {query}")
+
+        is_entry_point = sender_name is None
+        if is_entry_point:
+            self._emit_event(on_event, "WORKFLOW_START", {"user_query": query})
 
         if not self.keep_history:
             self._reset_chat_history()
@@ -203,6 +270,17 @@ class Agent(AI):
                                                             sender_type=EntityType.AGENT,
                                                             sender_name=self.name,
                                                             parent_id=query_msg_id)
+
+                    if is_entry_point:
+                        self._emit_event(on_event, "FINAL_RESPONSE", {
+                            "source": {
+                                "name": self.name,
+                                "type": "AGENT"
+                            },
+                            "content": user_query_answer
+                        })
+                        self._emit_event(on_event, "WORKFLOW_END", {})
+
                     return user_query_answer
 
                 tool_call = response.message.tool_calls[0]
@@ -230,20 +308,33 @@ class Agent(AI):
                                                                       parent_id=query_msg_id,
                                                                       tool_call_id=tool_call.id)
 
-                self._process_tool_call(response.message, tool_msg_id)
+                self._process_tool_call(response.message, tool_msg_id, on_event=on_event)
 
             except Exception as e:
                 error_msg = f"Error in chat processing: {str(e)}"
+                self._emit_event(on_event, "ERROR", {
+                    "source": {
+                        "name": self.name,
+                        "type": "AGENT"
+                    },
+                    "error_message": error_msg
+                })
+                if is_entry_point:
+                    self._emit_event(on_event, "WORKFLOW_END", {})
                 self.debugger.log(error_msg)
                 raise RuntimeError(error_msg)
 
-    def _process_tool_call(self, message: ChatCompletionMessage, parent_msg_id: Optional[str] = None) -> None:
+    def _process_tool_call(self,
+                           message: ChatCompletionMessage,
+                           parent_msg_id: Optional[str] = None,
+                           on_event: Optional[Callable] = None) -> None:
         """
         Process a tool call from the chat response.
 
         Args:
             message (ChatCompletionMessage): The message containing the tool call.
             parent_msg_id (Optional[str]): ID of the parent message in history.
+            on_event (Optional[Callable]): The event callback function.
 
         Raises:
             ValueError: If the specified tool is not found or if there's an error in processing arguments.
@@ -264,6 +355,17 @@ class Agent(AI):
             self.debugger.log(error_msg, level="error")
             raise ValueError(error_msg)
 
+        self._emit_event(
+            on_event, "AGENT_TOOL_CALL", {
+                "source": {
+                    "name": self.name,
+                    "type": "AGENT"
+                },
+                "tool_name": target_tool_name,
+                "tool_call_id": function_call.id,
+                "arguments": tool_arguments
+            })
+
         target_tool = next((tool for tool in self.tools if tool['metadata']['function']['name'] == target_tool_name),
                            None)
 
@@ -283,6 +385,16 @@ class Agent(AI):
             self.debugger.log(f"Tool execution successful")
             self.debugger.log(f"Tool response: {str(tool_feedback)}")
 
+            self._emit_event(
+                on_event, "AGENT_TOOL_RESPONSE", {
+                    "source": {
+                        "name": target_tool_name,
+                        "type": "TOOL"
+                    },
+                    "tool_call_id": function_call.id,
+                    "result": str(tool_feedback)
+                })
+
             tool_response_msg = {"role": "tool", "content": str(tool_feedback), "tool_call_id": function_call.id}
             self.chat_history.append(tool_response_msg)
 
@@ -295,6 +407,13 @@ class Agent(AI):
 
         except Exception as e:
             error_msg = f"Tool execution failed: {str(e)}"
+            self._emit_event(on_event, "ERROR", {
+                "source": {
+                    "name": target_tool_name,
+                    "type": "TOOL"
+                },
+                "error_message": error_msg
+            })
             self.debugger.log(error_msg, level="error")
             raise RuntimeError(error_msg) from e
 
@@ -389,7 +508,6 @@ class Agent(AI):
                 }
             }
         }
-        # Extract properties and required fields from MCP input schema
         if hasattr(tool, 'inputSchema') and tool.inputSchema:
             schema = tool.inputSchema
             property_names = []
@@ -426,7 +544,7 @@ class Agent(AI):
             async def _call_sse():
                 url = conf["url"]
                 auth_token = conf.get("auth_token")
-                endpoint = url  # Use the user-supplied URL exactly as written
+                endpoint = url
                 headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
                 async with sse_client(endpoint, headers=headers) as streams:
                     async with ClientSession(*streams) as session:
@@ -449,9 +567,17 @@ class Agent(AI):
 
             try:
                 if transport_type == "sse":
-                    return asyncio.run(_call_sse())
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(_call_sse())
+                    except RuntimeError:
+                        return asyncio.run(_call_sse())
                 elif transport_type == "stdio":
-                    return asyncio.run(_call_stdio())
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(_call_stdio())
+                    except RuntimeError:
+                        return asyncio.run(_call_stdio())
                 else:
                     raise ValueError(f"Unknown MCP transport {transport_type}")
             except Exception as e:
@@ -475,7 +601,7 @@ class Agent(AI):
         """
         return self.chat_history
 
-    def update_mcp_tools(self):
+    async def update_mcp_tools(self):
         """
         Refresh the agent's tools by re-discovering available tools from all MCP servers.
 
@@ -486,7 +612,7 @@ class Agent(AI):
         Raises:
             Exception: For any underlying error in the discovery or registration process.
         """
-        asyncio.run(self._load_mcp_tools())
+        await self._load_mcp_tools()
 
     def _reset_chat_history(self) -> None:
         """Reset chat history to initial state (system message only)."""

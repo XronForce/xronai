@@ -7,7 +7,7 @@ from a YAML file.
 """
 
 import importlib, uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from xronai.core import Supervisor, Agent
 from .config_validator import ConfigValidator
 
@@ -23,29 +23,40 @@ class AgentFactory:
     """
 
     @staticmethod
-    def create_from_config(config: Dict[str, Any]) -> Supervisor:
+    async def create_from_config(config: Dict[str, Any],
+                                 history_base_path: Optional[str] = None) -> Union[Supervisor, Agent]:
         """
-        Create a Supervisor with its entire hierarchy from a configuration dictionary.
+        Create a Supervisor or a standalone Agent from a configuration dictionary.
 
         Args:
             config (Dict[str, Any]): The configuration dictionary containing
                 the entire hierarchy structure.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
-            Supervisor: The root Supervisor of the created hierarchy.
+            Union[Supervisor, Agent]: The root Supervisor or Agent of the created workflow.
 
         Raises:
             ConfigValidationError: If the configuration is invalid.
         """
         ConfigValidator.validate(config)
-        # Generate workflow_id if not provided
         workflow_id = config.get('workflow_id', str(uuid.uuid4()))
-        return AgentFactory._create_supervisor(config['supervisor'], is_root=True, workflow_id=workflow_id)
+
+        if 'supervisor' in config:
+            return await AgentFactory._create_supervisor(config['supervisor'],
+                                                         is_root=True,
+                                                         workflow_id=workflow_id,
+                                                         history_base_path=history_base_path)
+        elif 'agent' in config:
+            return await AgentFactory._create_agent(config['agent'],
+                                                    workflow_id=workflow_id,
+                                                    history_base_path=history_base_path)
 
     @staticmethod
-    def _create_supervisor(supervisor_config: Dict[str, Any],
-                           is_root: bool = False,
-                           workflow_id: Optional[str] = None) -> Supervisor:
+    async def _create_supervisor(supervisor_config: Dict[str, Any],
+                                 is_root: bool = False,
+                                 workflow_id: Optional[str] = None,
+                                 history_base_path: Optional[str] = None) -> Supervisor:
         """
         Create a Supervisor instance and its children from a configuration dictionary.
 
@@ -53,6 +64,7 @@ class AgentFactory:
             supervisor_config (Dict[str, Any]): The configuration for this Supervisor.
             is_root (bool): Whether this Supervisor is the root of the hierarchy.
             workflow_id (Optional[str]): ID of the workflow (only for root supervisor).
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
             Supervisor: The created Supervisor instance with all its children.
@@ -61,28 +73,32 @@ class AgentFactory:
                                 llm_config=supervisor_config['llm_config'],
                                 system_message=supervisor_config['system_message'],
                                 workflow_id=workflow_id if is_root else None,
-                                is_assistant=supervisor_config.get('is_assistant', False))
+                                is_assistant=supervisor_config.get('is_assistant', False),
+                                history_base_path=history_base_path)
 
         for child_config in supervisor_config.get('children', []):
             if child_config['type'] == 'supervisor':
-                child = AgentFactory._create_supervisor(
-                    child_config,
-                    is_root=False,
-                    workflow_id=None  # Assistant supervisors get workflow_id during registration
-                )
-            else:  # agent
-                child = AgentFactory._create_agent(child_config)
+                child = await AgentFactory._create_supervisor(child_config,
+                                                              is_root=False,
+                                                              workflow_id=None,
+                                                              history_base_path=history_base_path)
+            else:
+                child = await AgentFactory._create_agent(child_config, history_base_path=history_base_path)
             supervisor.register_agent(child)
 
         return supervisor
 
     @staticmethod
-    def _create_agent(agent_config: Dict[str, Any]) -> Agent:
+    async def _create_agent(agent_config: Dict[str, Any],
+                            workflow_id: Optional[str] = None,
+                            history_base_path: Optional[str] = None) -> Agent:
         """
         Create an Agent instance from a configuration dictionary.
 
         Args:
             agent_config (Dict[str, Any]): The configuration for this Agent.
+            workflow_id (Optional[str]): The ID for the workflow, if this is a root agent.
+            history_base_path (Optional[str]): The root directory for storing history logs.
 
         Returns:
             Agent: The created Agent instance with its tools.
@@ -93,15 +109,20 @@ class AgentFactory:
             'name': agent_config['name'],
             'llm_config': agent_config['llm_config'],
             'system_message': agent_config['system_message'],
+            'workflow_id': workflow_id,
             'tools': tools,
-            'use_tools': agent_config.get('use_tools', bool(tools)),
+            'use_tools': agent_config.get('use_tools',
+                                          bool(tools) or bool(agent_config.get('mcp_servers'))),
             'keep_history': agent_config.get('keep_history', True),
             'output_schema': agent_config.get('output_schema'),
             'strict': agent_config.get('strict', False),
-            'mcp_servers': agent_config.get('mcp_servers', [])
+            'mcp_servers': agent_config.get('mcp_servers', []),
+            'history_base_path': history_base_path
         }
 
-        return Agent(**agent_params)
+        agent = Agent(**agent_params)
+        await agent._load_mcp_tools()
+        return agent
 
     @staticmethod
     def _create_tools(tools_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -116,7 +137,16 @@ class AgentFactory:
         """
         tools = []
         for tool_config in tools_config:
-            tool_function = AgentFactory._import_function(tool_config['python_path'])
+            imported_obj = AgentFactory._import_function(tool_config['python_path'])
+            tool_function = None
+
+            if isinstance(imported_obj, type):
+                tool_init_config = tool_config.get('config', {})
+                tool_instance = imported_obj(**tool_init_config)
+                tool_function = tool_instance.execute
+            else:
+                tool_function = imported_obj
+
             metadata = {
                 "type": "function",
                 "function": {
@@ -135,18 +165,18 @@ class AgentFactory:
     @staticmethod
     def _import_function(python_path: str):
         """
-        Import a function from a given Python path.
+        Import a function or class from a given Python path.
 
         Args:
-            python_path (str): The full path to the function, including module.
+            python_path (str): The full path to the object, including module.
 
         Returns:
-            Callable: The imported function.
+            Callable or type: The imported function or class.
 
         Raises:
-            ImportError: If the module or function cannot be imported.
-            AttributeError: If the specified function is not found in the module.
+            ImportError: If the module or object cannot be imported.
+            AttributeError: If the specified object is not found in the module.
         """
-        module_name, function_name = python_path.rsplit('.', 1)
+        module_name, object_name = python_path.rsplit('.', 1)
         module = importlib.import_module(module_name)
-        return getattr(module, function_name)
+        return getattr(module, object_name)

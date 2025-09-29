@@ -12,7 +12,7 @@ Components:
     HistoryManager: Main class for handling history operations
 
 Structure:
-    xronai_logs/{workflow_id}/history.jsonl
+    <base_path>/{workflow_id}/history.jsonl  (default base_path is 'xronai_logs')
 
 Note:
     Workflow directory must be initialized by a main supervisor before use.
@@ -45,18 +45,21 @@ class HistoryManager:
     the conversation structure and relationships.
 
     Attributes:
-        workflow_id (str): Unique identifier for the workflow
-        workflow_path (Path): Path to the workflow directory
-        history_file (Path): Path to the JSONL file storing the conversation history
+        workflow_id (str): Unique identifier for the workflow.
+        base_path (Path): The root directory for storing all logs.
+        workflow_path (Path): Path to the specific directory for this workflow's logs.
+        history_file (Path): Path to the JSONL file storing the conversation history.
     """
 
-    def __init__(self, workflow_id: str):
+    def __init__(self, workflow_id: str, base_path: Optional[str] = None):
         """
         Initialize the HistoryManager.
 
         Args:
             workflow_id (str): Unique identifier for the workflow.
                              Must be provided by a main supervisor.
+            base_path (Optional[str]): The root directory for history logs. 
+                                       Defaults to 'xronai_logs'.
 
         Raises:
             ValueError: If workflow_id is None or workflow directory doesn't exist.
@@ -65,7 +68,8 @@ class HistoryManager:
             raise ValueError("workflow_id must be provided")
 
         self.workflow_id = workflow_id
-        self.workflow_path = Path("xronai_logs") / self.workflow_id
+        self.base_path = Path(base_path) if base_path else Path("xronai_logs")
+        self.workflow_path = self.base_path / self.workflow_id
         self.history_file = self.workflow_path / "history.jsonl"
 
         if not self.workflow_path.exists():

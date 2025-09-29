@@ -1,0 +1,48 @@
+workflow_id: exported-workflow
+supervisor:
+  name: Supervisor_7
+  type: supervisor
+  llm_config:
+    model: ${LLM_MODEL}
+    api_key: ${LLM_API_KEY}
+    base_url: ${LLM_BASE_URL}
+  system_message: You are the Supervisor_7 supervisor.
+  is_assistant: false
+  children:
+  - name: Agent_770
+    type: agent
+    llm_config:
+      model: ${LLM_MODEL}
+      api_key: ${LLM_API_KEY}
+      base_url: ${LLM_BASE_URL}
+    system_message: You are the Agent_770 agent.
+    keep_history: true
+    mcp_servers:
+    - type: sse
+      url: https://remote.mcpservers.org/fetch
+      script_path: path/to/your/server.py
+    use_tools: true
+  - name: Agent_160
+    type: agent
+    llm_config:
+      model: ${LLM_MODEL}
+      api_key: ${LLM_API_KEY}
+      base_url: ${LLM_BASE_URL}
+    system_message: You are the Agent_160 agent.
+    keep_history: true
+    mcp_servers:
+    - type: stdio
+      url: http://localhost:8000/sse
+      script_path: /home/mubashir/work/personal/git_repos/xronai/examples/supervisor_multi_mcp/weather_server.py
+    tools:
+    - name: execute_terminal_command
+      type: class
+      python_path: xronai.tools.terminal.TerminalTool
+      description: Executes a command in a persistent Linux shell session and returns
+        the stdout and stderr.
+      parameters:
+        command:
+          type: string
+          description: The shell command to execute (e.g., 'ls -l', 'pwd').
+      config: {}
+    use_tools: true
