@@ -47,5 +47,5 @@ xronai = "studio.cli:app"
 where = ["src", "."]
 
 [tool.setuptools.package-data]
-xronai = ["server/ui/*"]
+xronai = ["server/ui/*", "server/ui/*/*"]
 studio = ["ui/*", "ui/*/*"]
