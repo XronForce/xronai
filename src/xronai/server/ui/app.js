@@ -3,13 +3,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const sessionList = document.getElementById("session-list");
     const log = document.getElementById("log");
     const form = document.getElementById("form");
-    const input = document.getElementById("input"); // Now a textarea
+    const input = document.getElementById("input");
+    const sendBtn = document.querySelector(".send-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
     const deleteChatBtn = document.getElementById("delete-chat-btn");
     const sessionTitle = document.getElementById("session-title");
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     const sunIcon = document.getElementById('theme-icon-sun');
     const moonIcon = document.getElementById('theme-icon-moon');
+    const connectionStatus = document.getElementById('connection-status');
 
     // --- State ---
     let activeSessionId = null;
@@ -38,7 +40,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const savedTheme = localStorage.getItem('xronai-theme') || 'dark';
     applyTheme(savedTheme);
 
-
     // --- Core API Functions ---
     async function fetchAPI(url, options = {}) {
         try {
@@ -47,20 +48,26 @@ document.addEventListener("DOMContentLoaded", () => {
             if (response.status === 204) return null;
             return response.json();
         } catch (error) {
-            addSystemLogEntry("error", `Network request failed: ${error.message}`);
+            updateConnectionStatus('disconnected', `Network Error: ${error.message}`);
             throw error;
         }
     }
 
     // --- UI Update & Rendering ---
-    function addSystemLogEntry(type, content) {
-        const entry = document.createElement("div");
-        entry.className = `log-entry system-message ${type}`;
-        entry.innerHTML = `<p>${content}</p>`;
-        log.appendChild(entry);
-        log.scrollTop = log.scrollHeight;
+    function updateConnectionStatus(status, message) {
+        connectionStatus.classList.remove('connected', 'disconnected');
+        if (status === 'connected') {
+            connectionStatus.classList.add('connected');
+            connectionStatus.textContent = message || 'Live connection established.';
+        } else if (status === 'disconnected') {
+            connectionStatus.classList.add('disconnected');
+            connectionStatus.textContent = message || 'Connection closed.';
+        } else {
+            connectionStatus.textContent = message || '';
+        }
     }
-    
+
+    /*
     function addThinkingIndicator() {
         if (document.getElementById('thinking-indicator')) return;
         const entry = document.createElement("div");
@@ -70,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
         log.appendChild(entry);
         log.scrollTop = log.scrollHeight;
     }
+    */
 
     function renderWorkflowEvent(event) {
         if (!event) return;
@@ -91,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 title = "Final Response"; content = data.content; source = data.source.name; icon = document.getElementById('icon-final-response').innerHTML; break;
             case "ERROR":
                 title = `Error from ${data.source.name}`; content = data.error_message; icon = document.getElementById('icon-error').innerHTML; break;
-            default: return; 
+            default: return;
         }
         addLogEntry({ icon, title, content, source, role });
     }
@@ -124,26 +132,30 @@ document.addEventListener("DOMContentLoaded", () => {
         if (ws && ws.readyState === WebSocket.OPEN) ws.close();
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${window.location.host}/ws/sessions/${sessionId}`);
-        ws.onopen = () => { addSystemLogEntry("system", "Live connection established."); input.disabled = false; input.focus(); };
+
+        ws.onopen = () => {
+            updateConnectionStatus('connected');
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        };
         
         ws.onmessage = (event) => {
-            document.getElementById('thinking-indicator')?.remove();
+            // document.getElementById('thinking-indicator')?.remove();
             const eventData = JSON.parse(event.data);
-
-            // =================================================================
-            // THE FIX: Ignore the WORKFLOW_START event from the server,
-            // as it has already been rendered locally for instant feedback.
-            // =================================================================
-            if (eventData.type === "WORKFLOW_START") {
-                return;
-            }
-
+            if (eventData.type === "WORKFLOW_START") return; // Ignore server echo of user message
             if (eventData.type === "WORKFLOW_END") return;
             renderWorkflowEvent(eventData);
         };
 
-        ws.onclose = () => { addSystemLogEntry("system", "Connection closed."); input.disabled = true; };
-        ws.onerror = () => addSystemLogEntry("error", "WebSocket connection error.");
+        ws.onclose = () => {
+            updateConnectionStatus('disconnected');
+            input.disabled = true;
+            sendBtn.disabled = true;
+        };
+        ws.onerror = () => {
+            updateConnectionStatus('disconnected', 'WebSocket connection error.');
+        };
     }
 
     async function switchSession(sessionId) {
@@ -165,16 +177,13 @@ document.addEventListener("DOMContentLoaded", () => {
     async function handleNewChat() {
         const newSession = await fetchAPI("/api/v1/sessions", { method: "POST" });
         if (newSession) {
-            const sessions = await fetchAPI("/api/v1/sessions");
-            if (sessions) renderSessionList(sessions.sessions, newSession.session_id);
-            await switchSession(newSession.session_id);
+            await initialize(); // Re-initialize to pick up the new session and switch to it
         }
     }
     
     async function handleDeleteChat() {
-        if (!activeSessionId || !confirm("Delete chat session?")) return;
+        if (!activeSessionId || !confirm("Are you sure you want to delete this chat session?")) return;
         await fetchAPI(`/api/v1/sessions/${activeSessionId}`, { method: "DELETE" });
-        addSystemLogEntry("system", `Session deleted.`);
         activeSessionId = null;
         localStorage.removeItem("xronai-active_session");
         await initialize();
@@ -185,12 +194,11 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         const query = input.value.trim();
         if (query && ws && ws.readyState === WebSocket.OPEN) {
-            // Render user message instantly, which is correct.
             renderWorkflowEvent({ type: 'WORKFLOW_START', data: { user_query: query }});
             ws.send(JSON.stringify({ query }));
             input.value = "";
-            input.style.height = 'auto'; // Reset height
-            addThinkingIndicator();
+            input.style.height = 'auto';
+            // addThinkingIndicator();
         }
     });
 
@@ -221,10 +229,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             renderSessionList([]);
             log.innerHTML = "";
-            addSystemLogEntry("system", "Start a new conversation to begin.");
             sessionTitle.textContent = "No Active Session";
             deleteChatBtn.style.display = 'none';
             input.disabled = true;
+            sendBtn.disabled = true;
+            updateConnectionStatus('disconnected', "Start a new conversation to begin.");
         }
     }
 

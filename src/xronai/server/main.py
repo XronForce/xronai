@@ -78,9 +78,10 @@ def _history_log_to_event(log_entry: Dict[str, Any], all_logs: List[Dict[str, An
 
         parent_tool_calls = parent_msg.get("tool_calls")
         if parent_tool_calls and parent_tool_calls[0]['function']['name'].startswith("delegate_to_"):
-            agent_name = parent_tool_calls[0]['function']['name'].replace("delegate_to_", "")
-            event["type"] = "AGENT_RESPONSE"
-            event["data"] = {"source": {"name": agent_name}, "content": content}
+            # agent_name = parent_tool_calls[0]['function']['name'].replace("delegate_to_", "")
+            # event["type"] = "AGENT_RESPONSE"
+            # event["data"] = {"source": {"name": agent_name}, "content": content}
+            return None  # Skip intermediate agent response for delegation
         else:
             event["type"] = "AGENT_TOOL_RESPONSE"
             event["data"] = {"source": {"name": sender_name}, "result": content}
