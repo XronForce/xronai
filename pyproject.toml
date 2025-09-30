@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xronai"
-version = "0.2.6" # Start with an initial version
+version = "0.2.7" # Start with an initial version
 authors = [
   { name="Mubashir ul Islam", email="mubashir54000@gmail.com" },
 ]
@@ -47,5 +47,5 @@ xronai = "studio.cli:app"
 where = ["src", "."]
 
 [tool.setuptools.package-data]
-xronai = ["server/ui/*"]
+xronai = ["server/ui/*", "server/ui/*/*"]
 studio = ["ui/*", "ui/*/*"]
