@@ -69,7 +69,7 @@ class Agent(AI):
         if not name:
             raise ValueError("Agent name cannot be empty")
 
-        self.name = name
+        self.name = "".join(name.split())
         self.workflow_id = workflow_id
         self.history_base_path = history_base_path
         self.use_tools = use_tools

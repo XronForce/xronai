@@ -56,7 +56,7 @@ class Supervisor(AI):
         if not name:
             raise ValueError("Supervisor name cannot be empty")
 
-        self.name = name
+        self.name = "".join(name.split())
         self.is_assistant = is_assistant
         self.workflow_id = workflow_id
         self.history_base_path = history_base_path
@@ -438,9 +438,10 @@ class Supervisor(AI):
                     feedback_msg = {"role": "tool", "content": agent_feedback, "tool_call_id": tool_call.id}
                     self.chat_history.append(feedback_msg)
 
+                    target_agent_name = tool_call.function.name.replace("delegate_to_", "")
                     self.history_manager.append_message(message=feedback_msg,
                                                         sender_type=EntityType.TOOL,
-                                                        sender_name=self.name,
+                                                        sender_name=target_agent_name,
                                                         parent_id=tool_msg_id,
                                                         tool_call_id=tool_call.id,
                                                         supervisor_chain=current_chain)
