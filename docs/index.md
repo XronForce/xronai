@@ -18,7 +18,7 @@ XronAI is built with a focus on structure, scalability, and ease of use. Here ar
 
 *   **Extensible Tool System:** Equip your Agents with custom capabilities. XronAI has a simple and powerful system for adding tools, such as the built-in `TerminalTool` which gives your agent persistent access to a shell environment.
 
-*   **MCP Integration:** Seamlessly connect your agents to remote tools and services using the Machine Communication Protocol (MCP), allowing for distributed and scalable agentic systems.
+*   **MCP Integration:** Seamlessly connect your agents to remote tools and services using the Model Context Protocol (MCP), allowing for distributed and scalable agentic systems.
 
 *   **Persistent History & Memory:** All conversations are automatically logged and managed, providing your agents with a persistent memory of past interactions within a session.
 
