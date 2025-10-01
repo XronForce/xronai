@@ -35,6 +35,11 @@ studio = [
     "websockets==15.0.1",
     "typer[all]==0.17.4",
 ]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/XronForce/xronai"
