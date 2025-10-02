@@ -1,0 +1,62 @@
+# Project Information
+site_name: Xron AI Docs
+site_description: "The Python SDK for building powerful, agentic AI chatbots."
+site_author: Mubashir ul Islam
+repo_url: https://github.com/XronForce/xronai
+repo_name: XronForce/xronai
+
+# Theme Configuration
+theme:
+  name: material
+  logo: assets/favicon.png
+  favicon: assets/favicon.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: cyan
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - navigation.tooltips
+
+# Plugins
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: true
+
+# Navigation Structure
+nav:
+  - Home: index.md
+  - Tutorials: tutorials.md
+  - Core Concepts: concepts.md 
+  - API Reference:
+      - Core:
+          - Agent: reference/core/agent.md
+          - Supervisor: reference/core/supervisor.md
+      - Configuration: reference/config.md
+      - History: reference/history.md
+      - Tools: reference/tools.md

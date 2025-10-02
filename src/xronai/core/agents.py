@@ -52,7 +52,7 @@ class Agent(AI):
             system_message (Optional[str]): The initial system message for the agent.
             use_tools (bool): Whether to use tools in interactions.
             keep_history (bool): Whether to maintain chat history between interactions.
-            mcp_servers : Optional[List[Dict[str, Any]]], default None
+            mcp_servers: Optional[List[Dict[str, Any]]], default None
                 List of dicts, where each defines an MCP server/proxy:
                 - For remote/SSE: {'type': 'sse', 'url': ..., 'auth_token': ...}
                 - For local/stdio: {'type': 'stdio', 'script_path': 'server.py'}
