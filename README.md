@@ -4,10 +4,6 @@
   </a>
 </div>
 
-<div align="center">
-  <h3>The Python SDK for building, orchestrating, and deploying powerful, agentic AI chatbots.</h3>
-</div>
-
 <p align="center">
   <a href="https://www.xron.ai/">
     <img src="https://img.shields.io/badge/website-xron.ai-blue.svg" alt="Website">
@@ -21,6 +17,10 @@
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
+
+<div align="center">
+  <h3>The Python SDK for building, orchestrating, and deploying powerful, agentic AI chatbots.</h3>
+</div>
 
 ---
 
