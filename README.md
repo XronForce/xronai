@@ -381,3 +381,9 @@ XronAI is actively evolving from its roots as an agentic chatbot SDK into a comp
 *   **Inter-Workflow Communication:** A new node type is being developed that will allow one XronAI workflow to trigger and pass data to another. This will enable the creation of complex, interconnected systems where different agent teams can collaborate to solve larger problems.
 
 We are excited about the future of agentic AI and welcome community feedback and contributions!
+
+---
+
+## Acknowledgements
+
+XronAI builds upon concepts and incorporates code from the [Nexus framework](https://github.com/PrimisAI/nexus), by PrimisAI. We gratefully acknowledge their foundational work and their contribution to the open-source community.
