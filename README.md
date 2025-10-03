@@ -62,31 +62,6 @@ LLM_BASE_URL="your-api-base-url"    # e.g., https://api.openai.com/v1
 
 Now, you are ready to build your first agentic workflow!
 
-## Explore the Examples
-
-The best way to learn XronAI is by diving into the hands-on examples provided in the repository. Each script is a self-contained demonstration of a specific feature.
-
-#### Core Concepts
-
-*   **Standalone Agent with History:** [`examples/agent_history_basic.py`](examples/agent_history_basic.py)  
-    See the simplest use case: a single agent that remembers your conversation.
-*   **Hierarchical Structure:** [`examples/hierarchical_structure.py`](examples/hierarchical_structure.py)  
-    Learn how to nest Supervisors to create complex organizational charts for your agents.
-*   **Loading Persistent History:** [`examples/history_loading.py`](examples/history_loading.py)  
-    Understand how to stop and resume a conversation with a workflow.
-
-#### Tool Usage
-
-*   **Agent with Multiple Tools:** [`examples/agent_tool_usage_benchmark.py`](examples/agent_tool_usage_benchmark.py)  
-    A demonstration of how a supervisor can delegate to multiple agents, each with multiple tools, in a single turn.
-*   **Connecting to Remote Tools (MCP):** [`examples/agent_with_mcp_tools.py`](examples/agent_with_mcp_tools.py)  
-    Learn how an agent can discover and use tools from a remote server using MCP.
-
-#### YAML Configuration
-
-*   **Task Management System from YAML:** [`examples/task_management_with_yaml/`](examples/task_management_with_yaml/)  
-    A complete example showing how to define a complex, multi-agent workflow entirely in a `config.yaml` file.
-
 ---
 
 ## XronAI Studio
@@ -365,6 +340,33 @@ await tool_agent.update_mcp_tools()
 ```
 
 For a complete, working example of a Supervisor managing multiple agents with different MCP transports, see the [multi-agent MCP example](examples/supervisor_multi_mcp/README.md).
+
+---
+
+## Explore the Examples
+
+The best way to learn XronAI is by diving into the hands-on examples provided in the repository. Each script is a self-contained demonstration of a specific feature.
+
+#### Core Concepts
+
+*   **Standalone Agent with History:** [`examples/agent_history_basic.py`](examples/agent_history_basic.py)  
+    See the simplest use case: a single agent that remembers your conversation.
+*   **Hierarchical Structure:** [`examples/hierarchical_structure.py`](examples/hierarchical_structure.py)  
+    Learn how to nest Supervisors to create complex organizational charts for your agents.
+*   **Loading Persistent History:** [`examples/history_loading.py`](examples/history_loading.py)  
+    Understand how to stop and resume a conversation with a workflow.
+
+#### Tool Usage
+
+*   **Agent with Multiple Tools:** [`examples/agent_tool_usage_benchmark.py`](examples/agent_tool_usage_benchmark.py)  
+    A demonstration of how a supervisor can delegate to multiple agents, each with multiple tools, in a single turn.
+*   **Connecting to Remote Tools (MCP):** [`examples/agent_with_mcp_tools.py`](examples/agent_with_mcp_tools.py)  
+    Learn how an agent can discover and use tools from a remote server using MCP.
+
+#### YAML Configuration
+
+*   **Task Management System from YAML:** [`examples/task_management_with_yaml/`](examples/task_management_with_yaml/)  
+    A complete example showing how to define a complex, multi-agent workflow entirely in a `config.yaml` file.
 
 ---
 
